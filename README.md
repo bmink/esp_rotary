@@ -11,7 +11,7 @@ decrement counting
 applied to the increments / decrements
 * Callers receive turn and switch events via a queue *and* also can read
 count value and switch status at any time
-* Switch implements software debounce
+* Switch has software debounce
 
 ## Using the driver
 
