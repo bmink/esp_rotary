@@ -10,7 +10,8 @@
 
 
 typedef struct rotary {
-	rotary_config_t	ro_config;
+	rotary_config_t	ro_conf;
+
 	unsigned char	ro_state;
 	
 	QueueHandle_t 	ro_value_mailb;
@@ -23,11 +24,33 @@ static unsigned char rotary_cnt = 0;
 
 static const char *logtag = "rotary";
 
+
 #define GPIO_ROT_A	4
 #define GPIO_ROT_B	5
 #define GPIO_SWITCH	6
 
 #define GPIO_BLINK	2
+
+
+
+esp_err_t
+rot_set_val(rotary_t *rot, const int32_t val)
+{
+	if(rot == NULL)
+		return ESP_ERR_INVALID_ARG;
+
+	return xQueueOverwrite(rot->ro_value_mailb, &val);
+}
+
+
+esp_err_t
+rot_get_val(rotary_t *rot, int32_t *val)
+{
+	if(rot == NULL)
+		return ESP_ERR_INVALID_ARG;
+
+	return xQueuePeek(rot->ro_value_mailb, &val, 0);
+}
 
 
 /* A naive implementation would simply look at B when A goes active (ie. is
@@ -87,8 +110,6 @@ static const char *logtag = "rotary";
 #define STATE_CCW3	6
 #define STATE_CNT	7
 
-static unsigned char rot_state = STATE_IDLE;
-
 
 /* rot_state_change contains the new state for each possible input for each
  * possible state. Each row represents the corresponding state value.
@@ -143,9 +164,16 @@ static char rot_state_change[STATE_CNT][4] = {
 };
 
 
-/* Internal event queue. Used by the ISRs to record events as they see them
+/* Internal event queue. Used by the ISRs to record events as they see them.
+ * These events are then processed by the event loop.
  *
- * event is a single byte of the following format:
+ * event is a word of the following format:
+ * 
+ * [Byte1][Byte2]
+ * 
+ * Byte 1 represents the index of the rotary generating the event
+ * 
+ * Byte 2:
  *  7 6 5 4 3 2 1 0
  *  | | | | | | | +- status of rotary B
  *  | | | | | | +--- status of rotary A
@@ -156,11 +184,9 @@ static char rot_state_change[STATE_CNT][4] = {
  *  | +------------- not used
  *  +--------------- event type (1 - rotary, 0 - switch)
  */
+
 #define EVENT_QUEUE_SIZ	10
-static QueueHandle_t _event_queue = NULL;
-
-static int rot_value;
-
+static QueueHandle_t isr_event_queue = NULL;
 
 void
 isr_rotary(void *arg)
@@ -168,22 +194,25 @@ isr_rotary(void *arg)
 	uint32_t a_value;
 	uint32_t b_value;
 	uint32_t regs;
-	char event;
+	char idx;
+	uint16_t event;
 
 	/* Since we are in an ISR, we are checking the pin value by accessing
 	 * the GPIO input register directly */
+	idx = (uint32_t) arg;
+
 	regs = (REG_READ(GPIO_IN_REG));
 	a_value = (regs >> GPIO_ROT_A) & 1;
 	b_value = (regs >> GPIO_ROT_B) & 1;
 
-	event = (a_value << 1) | b_value | (1 << 7);
+	event = ((uint16_t)idx) << 8 | (a_value << 1) | b_value | (1 << 7);
 
-	xQueueSendFromISR(_event_queue, &event, NULL);
+	xQueueSendFromISR(isr_event_queue, &event, NULL);
 }
 
 
 void
-isr_rotary_switch(void *arg)
+isr_switch(void *arg)
 {
 #if 0
 	int	rotary_idx;
@@ -195,53 +224,103 @@ isr_rotary_switch(void *arg)
 
 static void event_loop(void *arg)
 {
-	char	event;
-	char	statech;
+	uint16_t	event;
+	char		statech;
+	unsigned char	idx;
+	char		evbyte;
+	rotary_t	*rot;
+	int32_t		val;
+	int		ret;
 
-printf("Rotary size: %d\n", sizeof(esp_rotary_t));
+printf("Rotary size: %d\n", sizeof(rotary_t));
 printf("Entering event loop\n");
+
 	while(1) {
-		if(xQueueReceive(_event_queue, &event, portMAX_DELAY)) {
-			if(event & (1<<7)) {
-				/* Rotary event */
+		if(xQueueReceive(isr_event_queue, &event, portMAX_DELAY) !=
+		   pdPASS)
+			continue;
 
-				
-				statech =
-				    rot_state_change[rot_state][event & 0xf];
+		idx = event >> 8;
+		evbyte = event & 0xF;
 
-				rot_state = statech & 0xf;
-				if(statech & COUNT_INCR)
-					++rot_value;
-				else
-				if(statech & COUNT_DECR)
-					--rot_value;
+		if(idx > rotary_cnt)
+			continue;
 
-				if(statech > 0xf)
-					printf("rot_value = %d\n", rot_value);
+		rot = &rotary[idx];
+	
+		if(evbyte & (1<<7)) {
+			/* Rotary event */
+			statech = rot_state_change[rot->ro_state][evbyte & 0xf];
+
+			rot->ro_state = statech & 0xf;
+
+			if(statech & (COUNT_INCR | COUNT_DECR)) {
+				ret  = rot_get_val(rot, &val);
+				if(ret != pdPASS)
+					continue;
+
+				if(statech & COUNT_INCR) {
+					switch(rot->ro_conf.rc_style) {
+					case ROT_STYLE_BOUND:
+						if(val < rot->ro_conf.rc_max)
+							++val;
+						break;
+					case ROT_STYLE_WRAPAROUND:
+						if(val == rot->ro_conf.rc_max)
+						    val = rot->ro_conf.rc_min;
+						break;
+					default:
+						++val;
+					}
+				}
+				else { /* COUNT_DECR */	
+					switch(rot->ro_conf.rc_style) {
+					case ROT_STYLE_BOUND:
+						if(val > rot->ro_conf.rc_max)
+							--val;
+						break;
+					case ROT_STYLE_WRAPAROUND:
+						if(val == rot->ro_conf.rc_min)
+						    val = rot->ro_conf.rc_max;
+						break;
+					default:
+						--val;
+					}
+				}
+
+				rot_set_val(rot, val);
 			}
 
+			if(statech > 0xf) {
+				for(idx = 0; idx < rotary_cnt; ++idx) {
+					rot_get_val(&rotary[idx], &val);
+					printf("%2d = %4"PRId32"d ", idx, val);
+				}
+				printf("\n");	
+			}
 			
+		} else
+		if(evbyte & (1<<6)) {
+			/* Switch event */
 		}
+
 		//printf("high watermark: %d\n",
 		//    uxTaskGetStackHighWaterMark(NULL));
 	}
 }
-
-
-  
+	  
 
 int
-config_gpio(int pinnr, int isinput, gpio_isr_t isr, void *isr_arg)
+config_led_gpio(int pinnr)
 {
 	gpio_config_t	config;
 	int		ret;
 
 	memset(&config, 0, sizeof(gpio_config_t));
 
-	config.mode = isinput ? GPIO_MODE_INPUT : GPIO_MODE_OUTPUT;
-	config.intr_type = isr ? GPIO_INTR_ANYEDGE : GPIO_INTR_DISABLE;
-    	config.pin_bit_mask = 1ULL << pinnr;
-	config.pull_up_en = 1;
+	config.mode = GPIO_MODE_OUTPUT;
+	config.intr_type = GPIO_INTR_DISABLE;
+	config.pin_bit_mask = 1ULL << pinnr;
 	ret = gpio_config(&config);
 	if(ret != ESP_OK) {
 		printf("Could not config gpio\n");
@@ -249,29 +328,134 @@ config_gpio(int pinnr, int isinput, gpio_isr_t isr, void *isr_arg)
 		
 	}
 
-	if(isr) {
-		ret = gpio_isr_handler_add(pinnr, isr, isr_arg);
-		if(ret != ESP_OK) {
-			printf("Could not install interrupt handler\n");
-			return ret;
-		}
-	}
-
 	return 0;
 }
 
 
-#define EVENT_LOOP_PRIORITY	10
+#define ROT_EVENT_LOOP_PRIORITY	10
+
+esp_err_t
+rotary_config(rotary_config_t *rconf, unsigned char cnt)
+{
+	int		err;
+	int		ret;
+	uint32_t	i;
+	rotary_t	*rot;
+	rotary_config_t	*conf;
+	gpio_config_t	config;
+
+	if(rconf == NULL || cnt == 0)
+		return ESP_ERR_INVALID_ARG;
+
+	err = ESP_OK;
+
+	rotary = malloc(sizeof(rotary_t) * cnt);
+	if(rotary == NULL) {
+		err = ESP_ERR_NO_MEM;
+		goto end_label;
+	}
+
+	memset(rotary, 0, sizeof(rotary_t) * cnt);
+
+	memset(&config, 0, sizeof(gpio_config_t));
+	config.mode = GPIO_MODE_INPUT;
+	config.intr_type = GPIO_INTR_ANYEDGE;
+	config.pull_up_en = 1;
+
+	for(i = 0; i < cnt; ++i) {
+		rot = &rotary[i];
+		conf = &rconf[i];
+
+		config.pin_bit_mask |= 1ULL << conf->rc_pin_a;
+		config.pin_bit_mask |= 1ULL << conf->rc_pin_a;
+		config.pin_bit_mask |= 1ULL << conf->rc_pin_switch;
+
+		ret = gpio_isr_handler_add(conf->rc_pin_a, isr_rotary,
+		    (void *) i);
+		if(ret != ESP_OK) {
+			err = ret;
+			goto end_label;
+		}
+
+		ret = gpio_isr_handler_add(conf->rc_pin_b, isr_rotary,
+		    (void *) i);
+		if(ret != ESP_OK) {
+			err = ret;
+			goto end_label;
+		}
+
+#if 0
+		ret = gpio_isr_handler_add(conf->rc_pin_switch, isr_switch,
+		    (void *) i);
+		if(ret != ESP_OK) {
+			err = ret;
+			goto end_label;
+		}
+#endif
+
+		rot->ro_value_mailb = xQueueCreate(1, sizeof(int32_t));
+		ret = rot_set_val(rot, rconf->rc_start);
+		if(ret != ESP_OK) {
+			err = ret;
+			goto end_label;
+		}
+
+		rot->ro_conf = rconf[i];
+		rot->ro_state = STATE_IDLE;
+	}
+
+	ret = gpio_config(&config);
+	if(ret != ESP_OK) {
+		err = ret;
+		goto end_label;
+	}
+
+	isr_event_queue = xQueueCreate(EVENT_QUEUE_SIZ, sizeof(uint16_t));
+	if(isr_event_queue == NULL) {
+		err = ESP_FAIL;
+		goto end_label;
+	}
+
+	ret = xTaskCreate(event_loop, "event_loop", 4096, NULL,
+	    ROT_EVENT_LOOP_PRIORITY, NULL);
+	if(ret != pdPASS) {
+		goto end_label;
+	} else
+		ret = ESP_OK;
+
+
+end_label:
+
+
+	if(err != ESP_OK && rotary != NULL) {
+		free(rotary);
+		rotary_cnt = 0;
+	}
+
+	return err;
+}
+
+
+
+
+
+
+
 
 void
 app_main(void)
 {
 	esp_err_t	ret;
 
+	rotary_config_t	rconf[1];
+
+	memset(rconf, 0, sizeof(rotary_config_t) * 1);
+
 	ret = ESP_OK;
 
 printf("here\n");
 
+#if 0
 	ESP_GOTO_ON_ERROR(gpio_install_isr_service(0), err_label, logtag,
 	    "Could not install gpio ISR Service");
 
@@ -287,27 +471,15 @@ printf("here\n");
 	ESP_GOTO_ON_ERROR(config_gpio(GPIO_SWITCH, 1, isr_rotary_switch, NULL),
 	    err_label, logtag, "Could not configure pin %d", GPIO_SWITCH);
 
+#endif
+
 	/* LED to blink: output, no interrupt */
-	ESP_GOTO_ON_ERROR(config_gpio(GPIO_BLINK, 0, NULL, NULL), err_label,
-	    logtag, "Could not configure pin %d", GPIO_BLINK);
+	ESP_GOTO_ON_ERROR(config_led_gpio(GPIO_BLINK), err_label,
+	    logtag, "Could not configure LED on pin %d", GPIO_BLINK);
 
 printf("here2\n");
 
-	_event_queue = xQueueCreate(EVENT_QUEUE_SIZ, sizeof(uint32_t));
-	if(_event_queue == NULL) {
-		printf("Could not create _event_queue");
-		goto err_label;
-	}
-
 printf("here3\n");
-
-	ret = xTaskCreate(event_loop, "event_loop", 4096, NULL,
-	    EVENT_LOOP_PRIORITY, NULL);
-	if(ret != pdPASS) {
-		printf("Could not create event_loop task");
-		goto err_label;
-	} else
-		ret = ESP_OK;
 
 printf("here4\n");
 
