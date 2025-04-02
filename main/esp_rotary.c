@@ -25,10 +25,6 @@ static unsigned char rotary_cnt = 0;
 static const char *logtag = "rotary";
 
 
-#define GPIO_ROT_A	4
-#define GPIO_ROT_B	5
-#define GPIO_SWITCH	6
-
 #define GPIO_BLINK	2
 
 
@@ -36,10 +32,15 @@ static const char *logtag = "rotary";
 esp_err_t
 rot_set_val(rotary_t *rot, const int32_t val)
 {
+	int	ret;
 	if(rot == NULL)
 		return ESP_ERR_INVALID_ARG;
 
-	return xQueueOverwrite(rot->ro_value_mailb, &val);
+	ret = xQueueOverwrite(rot->ro_value_mailb, &val);
+	if(ret != pdPASS)
+		return ESP_FAIL;
+	else
+		return ESP_OK;
 }
 
 
@@ -49,7 +50,7 @@ rot_get_val(rotary_t *rot, int32_t *val)
 	if(rot == NULL)
 		return ESP_ERR_INVALID_ARG;
 
-	return xQueuePeek(rot->ro_value_mailb, &val, 0);
+	return xQueuePeek(rot->ro_value_mailb, val, 0);
 }
 
 
@@ -85,7 +86,7 @@ rot_get_val(rotary_t *rot, int32_t *val)
  *          \------->------->----/\-----<-------<------/
  *
  * We start in IDLE, when both pins are inactive. When the rotary encoder is
- * turned, the state machine will start advancing in the direction indicated by 
+ * turned, the state machine will 100start advancing in the direction indicated by 
  * the pin values. Due to bounce, during each state change it may oscillate
  * back and forth between the states a number of times.
  * 
@@ -191,19 +192,19 @@ static QueueHandle_t isr_event_queue = NULL;
 void
 isr_rotary(void *arg)
 { 
-	uint32_t a_value;
-	uint32_t b_value;
-	uint32_t regs;
-	char idx;
-	uint16_t event;
+	uint32_t 	a_value;
+	uint32_t 	b_value;
+	uint32_t	regs;
+	unsigned char	idx;
+	uint16_t	event;
 
 	/* Since we are in an ISR, we are checking the pin value by accessing
 	 * the GPIO input register directly */
 	idx = (uint32_t) arg;
 
 	regs = (REG_READ(GPIO_IN_REG));
-	a_value = (regs >> GPIO_ROT_A) & 1;
-	b_value = (regs >> GPIO_ROT_B) & 1;
+	a_value = (regs >> rotary[idx].ro_conf.rc_pin_a) & 1;
+	b_value = (regs >> rotary[idx].ro_conf.rc_pin_b) & 1;
 
 	event = ((uint16_t)idx) << 8 | (a_value << 1) | b_value | (1 << 7);
 
@@ -222,7 +223,9 @@ isr_switch(void *arg)
 }
 
 
-static void event_loop(void *arg)
+
+static void
+event_loop(void *arg)
 {
 	uint16_t	event;
 	char		statech;
@@ -231,25 +234,31 @@ static void event_loop(void *arg)
 	rotary_t	*rot;
 	int32_t		val;
 	int		ret;
+	int		changed;
+	int		i;
 
 printf("Rotary size: %d\n", sizeof(rotary_t));
 printf("Entering event loop\n");
 
 	while(1) {
+		/* Wait for events from ISRr */
 		if(xQueueReceive(isr_event_queue, &event, portMAX_DELAY) !=
 		   pdPASS)
 			continue;
 
-		idx = event >> 8;
-		evbyte = event & 0xF;
 
-		if(idx > rotary_cnt)
+		idx = event >> 8;
+		evbyte = event & 0xff;
+
+
+		if(idx >= rotary_cnt)
 			continue;
 
 		rot = &rotary[idx];
 	
 		if(evbyte & (1<<7)) {
 			/* Rotary event */
+			changed = 0;
 			statech = rot_state_change[rot->ro_state][evbyte & 0xf];
 
 			rot->ro_state = statech & 0xf;
@@ -262,39 +271,49 @@ printf("Entering event loop\n");
 				if(statech & COUNT_INCR) {
 					switch(rot->ro_conf.rc_style) {
 					case ROT_STYLE_BOUND:
-						if(val < rot->ro_conf.rc_max)
+						if(val < rot->ro_conf.rc_max) {
 							++val;
+							++changed;
+						}
 						break;
+
 					case ROT_STYLE_WRAPAROUND:
+					default:
 						if(val == rot->ro_conf.rc_max)
 						    val = rot->ro_conf.rc_min;
+						else
+						    ++val;
+						++changed;
 						break;
-					default:
-						++val;
 					}
 				}
 				else { /* COUNT_DECR */	
 					switch(rot->ro_conf.rc_style) {
 					case ROT_STYLE_BOUND:
-						if(val > rot->ro_conf.rc_max)
+						if(val > rot->ro_conf.rc_min) {
 							--val;
+							++changed;
+						}
 						break;
+
 					case ROT_STYLE_WRAPAROUND:
+					default:
 						if(val == rot->ro_conf.rc_min)
 						    val = rot->ro_conf.rc_max;
+						else
+						    --val;
+						++changed;
 						break;
-					default:
-						--val;
 					}
 				}
-
-				rot_set_val(rot, val);
+				if(changed)
+					rot_set_val(rot, val);
 			}
 
-			if(statech > 0xf) {
-				for(idx = 0; idx < rotary_cnt; ++idx) {
-					rot_get_val(&rotary[idx], &val);
-					printf("%2d = %4"PRId32"d ", idx, val);
+			if(changed) {
+				for(i = 0; i < rotary_cnt; ++i) {
+					rot_get_val(&rotary[i], &val);
+					printf("%2d = %4"PRId32" ", i, val);
 				}
 				printf("\n");	
 			}
@@ -367,7 +386,7 @@ rotary_config(rotary_config_t *rconf, unsigned char cnt)
 		conf = &rconf[i];
 
 		config.pin_bit_mask |= 1ULL << conf->rc_pin_a;
-		config.pin_bit_mask |= 1ULL << conf->rc_pin_a;
+		config.pin_bit_mask |= 1ULL << conf->rc_pin_b;
 		config.pin_bit_mask |= 1ULL << conf->rc_pin_switch;
 
 		ret = gpio_isr_handler_add(conf->rc_pin_a, isr_rotary,
@@ -394,13 +413,13 @@ rotary_config(rotary_config_t *rconf, unsigned char cnt)
 #endif
 
 		rot->ro_value_mailb = xQueueCreate(1, sizeof(int32_t));
-		ret = rot_set_val(rot, rconf->rc_start);
+		ret = rot_set_val(rot, conf->rc_start);
 		if(ret != ESP_OK) {
 			err = ret;
 			goto end_label;
 		}
 
-		rot->ro_conf = rconf[i];
+		rot->ro_conf = *conf;
 		rot->ro_state = STATE_IDLE;
 	}
 
@@ -416,6 +435,8 @@ rotary_config(rotary_config_t *rconf, unsigned char cnt)
 		goto end_label;
 	}
 
+	rotary_cnt = cnt;
+
 	ret = xTaskCreate(event_loop, "event_loop", 4096, NULL,
 	    ROT_EVENT_LOOP_PRIORITY, NULL);
 	if(ret != pdPASS) {
@@ -423,9 +444,7 @@ rotary_config(rotary_config_t *rconf, unsigned char cnt)
 	} else
 		ret = ESP_OK;
 
-
 end_label:
-
 
 	if(err != ESP_OK && rotary != NULL) {
 		free(rotary);
@@ -447,11 +466,31 @@ app_main(void)
 {
 	esp_err_t	ret;
 
-	rotary_config_t	rconf[1];
+	rotary_config_t	rconf[2];
 
-	memset(rconf, 0, sizeof(rotary_config_t) * 1);
+	memset(rconf, 0, sizeof(rotary_config_t) * 2);
 
-	ret = ESP_OK;
+	rconf[0].rc_pin_a = 7;
+	rconf[0].rc_pin_b = 8;
+	rconf[0].rc_pin_switch = 9;
+
+	rconf[1].rc_style = ROT_STYLE_WRAPAROUND;
+	rconf[1].rc_max = 30;
+	rconf[1].rc_min = -10;
+	rconf[1].rc_start = 10;
+	
+	rconf[1].rc_pin_a = 4;
+	rconf[1].rc_pin_b = 5;
+	rconf[1].rc_pin_switch = 6;
+
+	ESP_GOTO_ON_ERROR(gpio_install_isr_service(0), err_label, logtag,
+	    "Could not install gpio ISR Service");
+
+	ret = rotary_config(rconf, 2);
+	if(ret != ESP_OK) {
+		printf("Could not configure rotary encoders\n");
+		goto err_label;
+	}	
 
 printf("here\n");
 
