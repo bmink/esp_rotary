@@ -362,6 +362,9 @@ rotary_config(rotary_config_t *rconf, unsigned char cnt)
 	rotary_config_t	*conf;
 	gpio_config_t	config;
 
+	if(rotary != 0)
+		return ESP_ERR_NOT_ALLOWED; /* already configured */
+
 	if(rconf == NULL || cnt == 0)
 		return ESP_ERR_INVALID_ARG;
 
