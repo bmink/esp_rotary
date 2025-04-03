@@ -25,9 +25,6 @@ once, repeated calls to `rotary_config()` are not allowed.
 `rotary_config()` will configure the gpio pins, interrupts, internal event
 queues and state machines (see "Implementation Notes" below).
 
-The application needs to ensure that `gpio_install_isr_service()` has
-been called before attempting to call `rotary_config()`.
-
 Example configuration:
 
 ```
@@ -53,15 +50,6 @@ rconf[1].rc_max = 30;
 rconf[1].rc_min = -10;
 rconf[1].rc_start = 10;
 
-/* gpio_install_isr_service() must be called before rotary_config().
- * Since it should only be called once it is left to the application to
- * decide when it's best to do it. */
-
-if(gpio_install_isr_service(0) != ESP_OK) {
-	printf("Could not install ISR service\n");
-	goto error_label;
-}
-
 if(rotary_config(rconf, 2) != ESP_OK) {
 	printf("Could not configure rotary encoders\n");
 	goto error_label;
@@ -76,9 +64,9 @@ directly.
 
 Upon successful initialization, a queue named `rotary_event_queue` becomes
 available. The application can wait on this queue to receive events of type
-`rotary_event_t`. Each event comes with the index of the encoder that is sending
-the event, the tupe of event (value increment/decrement, switch press or
-release, as well as the encoder's value.
+`rotary_event_t`. Each event contails with the index of the encoder that is
+sending the event, the type of the event (value increment/decrement, switch
+press or release, as well as the encoder's value.
 
 Example usage of the rotary encoder event queue:
 
@@ -99,6 +87,53 @@ Example of reading rotary value and switch state directly:
 
 ```
 TODO
+```
+
+
+### Compile-time configuration options
+
+`rotary_params.h` contains constants that can be modified to the application's
+needs. Most of these are fine to leave alone. The only one to pay attention to
+is `ROTARY_CALL_GPIO_INSTALL_ISR_SERVICE`. gpio_install_isr_service() must
+only be called once, so if you application already calls it somewhere else,
+make sure to set this to 0.
+
+The following constants are defined:
+
+```
+#define ROTARY_CALL_GPIO_INSTALL_ISR_SERVICE 1
+        /* If this is nonzero, rotary_config() will call
+         * gpio_install_isr_service(). Set to 0 or the application will call
+         * it (make sure it is called before rotary_config() */
+
+#define ROTARY_GPIO_INSTALL_ISR_SERVICE_FLAGS 0
+        /* Flags to call gpio_install_isr_service() with. */
+
+#define ROTARY_ISR_EVENT_TASK_PRI 10
+        /* Priority of esp_rotary's internal event management task. */
+
+#define ROTARY_SWITCH_DEBOUNCE_MS 50
+        /* Milliseconds delay for the switch debounce logic */
+
+#define ROTARY_BOOST_MEDIUM_MS 20
+        /* Milliseconds between value changes under which the medium boost
+         * mode will engage */
+
+#define ROTARY_BOOST_MEDIUM_MULTIPLIER 2
+        /* Value change multiplier to apply in medium boost mode  */
+
+#define ROTARY_BOOST_FAST_MS 20
+        /* Milliseconds between value changes under which the fast boost
+         * mode will engage */
+
+#define ROTARY_BOOST_FAST_MULTIPLIER 4
+        /* Value change multiplier to apply in fast boost mode  */
+
+#define ROTARY_EVENT_QUEUE_SIZE 10
+        /* Size of rotary_event_queue  */
+
+#define ROTARY_ISR_QUEUE_SIZE 10
+        /* Size of esp_rotary's internal ISR event queue  */
 ```
 
 

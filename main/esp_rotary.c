@@ -7,6 +7,7 @@
 #include "soc/gpio_reg.h"
 #include "esp_check.h"
 #include "esp_rotary.h"
+#include "esp_rotary_params.h"
 
 
 typedef struct rotary {
@@ -370,6 +371,16 @@ rotary_config(rotary_config_t *rconf, unsigned char cnt)
 
 	err = ESP_OK;
 
+
+	if(ROTARY_CALL_GPIO_INSTALL_ISR_SERVICE) {
+		ret = gpio_install_isr_service(
+		    ROTARY_GPIO_INSTALL_ISR_SERVICE_FLAGS);
+		if(ret != ESP_OK) {
+			err = ret;
+			goto end_label;
+		}
+	}
+
 	rotary = malloc(sizeof(rotary_t) * cnt);
 	if(rotary == NULL) {
 		err = ESP_ERR_NO_MEM;
@@ -494,13 +505,6 @@ app_main(void)
 	rconf[1].rc_min = -10;
 	rconf[1].rc_start = 10;
 	
-	/* gpio_install_isr_service() must be called before rotary_config().
-	 * Since it should only be called once it is left to the caller to
-	 * decide when it's best to do it. */
-
-	ESP_GOTO_ON_ERROR(gpio_install_isr_service(0), err_label, logtag,
-	    "Could not install gpio ISR Service");
-
 	ret = rotary_config(rconf, 2);
 	if(ret != ESP_OK) {
 		printf("Could not configure rotary encoders\n");
