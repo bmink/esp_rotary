@@ -16,10 +16,11 @@ count value and switch status at any time
 ## Using the driver
 
 ### Setup
+The public interface is defined in `esp_rotary.h`.
 
-Rotery encoders are set up and configured via the `rotary_config()` call
-which takes an array of `rotary_config_t` structs. All encoders have to
-be configured at once, repeated calls to `rotary_config()` are not allowed.
+Encoders are set up and configured via the `rotary_config()` call which takes
+an array of `rotary_config_t` structs. All encoders have to be configured at
+once, repeated calls to `rotary_config()` are not allowed.
 
 `rotary_config()` will configure the gpio pins, interrupts, internal event
 queues and state machines (see "Implementation Notes" below).
@@ -29,6 +30,7 @@ Example configuration:
 ```
 /* All rotary encoders have to be configured at once. Here we set up
  * two encoders */
+#include "esp_rotary.h"
 
 rotary_config_t rconf[2];
 memset(rconf, 0, sizeof(rotary_config_t) * 2);
