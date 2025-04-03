@@ -56,6 +56,7 @@ rconf[1].rc_start = 10;
 /* gpio_install_isr_service() must be called before rotary_config().
  * Since it should only be called once it is left to the application to
  * decide when it's best to do it. */
+
 if(gpio_install_isr_service(0) != ESP_OK) {
 	printf("Could not install ISR service\n");
 	goto error_label;
