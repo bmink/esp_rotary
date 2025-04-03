@@ -56,7 +56,7 @@ rconf[1].rc_min = -10;
 rconf[1].rc_start = 10;
 
 /* gpio_install_isr_service() must be called before rotary_config().
- * Since it should only be called once it is left to the caller to
+ * Since it should only be called once it is left to the application to
  * decide when it's best to do it. */
 
 ESP_GOTO_ON_ERROR(gpio_install_isr_service(0), err_label, logtag,
