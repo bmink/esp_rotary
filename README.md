@@ -32,11 +32,10 @@ Example configuration:
 
 ```
 rotary_config_t rconf[2];
+memset(rconf, 0, sizeof(rotary_config_t) * 2);
 
 /* All rotary encoders have to be configured at once. Here we set up
  * two encoders: */
-
-memset(rconf, 0, sizeof(rotary_config_t) * 2);
 
 rconf[0].rc_pin_a = 7;
 rconf[0].rc_pin_b = 8;
@@ -57,7 +56,6 @@ rconf[1].rc_start = 10;
 /* gpio_install_isr_service() must be called before rotary_config().
  * Since it should only be called once it is left to the application to
  * decide when it's best to do it. */
-
 if(gpio_install_isr_service(0) != ESP_OK) {
 	printf("Could not install ISR service\n");
 	goto error_label;
