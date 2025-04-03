@@ -31,12 +31,11 @@ been called before attempting to call `rotary_config()`.
 Example configuration:
 
 ```
-#include "esp_rotary.h"
+rotary_config_t rconf[2];
 
 /* All rotary encoders have to be configured at once. Here we set up
  * two encoders: */
 
-rotary_config_t rconf[2];
 memset(rconf, 0, sizeof(rotary_config_t) * 2);
 
 rconf[0].rc_pin_a = 7;
@@ -59,21 +58,15 @@ rconf[1].rc_start = 10;
  * Since it should only be called once it is left to the application to
  * decide when it's best to do it. */
 
-ESP_GOTO_ON_ERROR(gpio_install_isr_service(0), err_label, logtag,
-    "Could not install gpio ISR Service");
+if(gpio_install_isr_service(0) != ESP_OK) {
+	printf("Could not install ISR service\n");
+	goto error_label;
+}
 
-ret = rotary_config(rconf, 2);
-if(ret != ESP_OK) {
+if(rotary_config(rconf, 2) != ESP_OK) {
 	printf("Could not configure rotary encoders\n");
-	goto err_label;
-
-/* ... */
-
-err_label:
-
-printf("Error\n");
-
-/* ... */
+	goto error_label;
+}
 ```
 
 The encoders are not ready to be used. There are two ways the encoders can
