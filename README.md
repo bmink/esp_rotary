@@ -16,7 +16,7 @@ count value and switch status at any time
 ## Using the driver
 
 ### Setup
-The public interface is defined in `esp_rotary.h`.
+The public interface is defined in `esp_rotary.h`
 
 Encoders are set up and configured via the `rotary_config()` call which takes
 an array of `rotary_config_t` structs. All encoders have to be configured at
@@ -26,7 +26,7 @@ once, repeated calls to `rotary_config()` are not allowed.
 queues and state machines (see "Implementation Notes" below).
 
 The application needs to ensure that `gpio_install_isr_service()` has
-been called before attempting to call `rotary_config()`.
+been called before attempting to call `rotary_config()`
 
 Example configuration:
 
