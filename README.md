@@ -68,8 +68,8 @@ if(rotary_config(rconf, 2) != ESP_OK) {
 }
 ```
 
-The encoders are not ready to be used. There are two ways the encoders can
-be used: event queue or reading values directly
+The encoders are now up and running and ready to be used. There are two ways
+applications can use encoders: using the event queue or reading values directly
 
 ### Rotary encoder event queue
 
