@@ -16,10 +16,12 @@ typedef struct rotary_config {
 	int32_t			rc_max;
 	int32_t			rc_min;
 	int32_t			rc_start;
+	unsigned char		enable_speed_boost;
 
 	unsigned char		rc_pin_a;
 	unsigned char		rc_pin_b;
 	unsigned char		rc_pin_switch;
+
 
 } rotary_config_t;
 

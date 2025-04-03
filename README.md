@@ -115,19 +115,19 @@ The following constants are defined:
 #define ROTARY_SWITCH_DEBOUNCE_MS 50
         /* Milliseconds delay for the switch debounce logic */
 
-#define ROTARY_BOOST_MEDIUM_MS 20
+#define ROTARY_SPEED_BOOST_MEDIUM_MS 20
         /* Milliseconds between value changes under which the medium boost
          * mode will engage */
 
-#define ROTARY_BOOST_MEDIUM_MULTIPLIER 2
-        /* Value change multiplier to apply in medium boost mode  */
+#define ROTARY_SPEED_BOOST_MEDIUM_VALUE_CHANGE 2
+        /* Value change to apply in medium boost mode  */
 
-#define ROTARY_BOOST_FAST_MS 20
+#define ROTARY_SPEED_BOOST_FAST_MS 20
         /* Milliseconds between value changes under which the fast boost
          * mode will engage */
 
-#define ROTARY_BOOST_FAST_MULTIPLIER 4
-        /* Value change multiplier to apply in fast boost mode  */
+#define ROTARY_SPEED_BOOST_FAST_VALUE_CHANGE 4
+        /* Value change to apply in fast boost mode  */
 
 #define ROTARY_EVENT_QUEUE_SIZE 10
         /* Size of rotary_event_queue  */
