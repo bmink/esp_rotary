@@ -69,13 +69,14 @@ if(rotary_config(rconf, 2) != ESP_OK) {
 ```
 
 The encoders are now up and running and ready to be used. There are two ways
-applications can use encoders: using the event queue or reading values directly
+applications can use encoders: using the event queue or reading values
+directly.
 
 ### Rotary encoder event queue
 
-Upon successful initialization, a queue called `rot_event_queue` becomes
+Upon successful initialization, a queue named `rotary_event_queue` becomes
 available. The application can wait on this queue to receive events of type
-`rot_event_t`. Each event comes with the index of the encoder that is sending
+`rotary_event_t`. Each event comes with the index of the encoder that is sending
 the event, the tupe of event (value increment/decrement, switch press or
 release, as well as the encoder's value.
 
