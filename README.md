@@ -31,9 +31,10 @@ been called before attempting to call `rotary_config()`.
 Example configuration:
 
 ```
-/* All rotary encoders have to be configured at once. Here we set up
- * two encoders */
 #include "esp_rotary.h"
+
+/* All rotary encoders have to be configured at once. Here we set up
+ * two encoders: */
 
 rotary_config_t rconf[2];
 memset(rconf, 0, sizeof(rotary_config_t) * 2);
