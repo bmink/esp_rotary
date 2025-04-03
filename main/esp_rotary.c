@@ -22,7 +22,6 @@ typedef struct rotary {
 static rotary_t	*rotary = NULL;
 static unsigned char rotary_cnt = 0;	
 
-static const char *logtag = "rotary";
 
 
 #define GPIO_BLINK	2
@@ -459,6 +458,7 @@ end_label:
 
 
 
+static const char *logtag = "rotary test";
 
 
 void
@@ -466,22 +466,34 @@ app_main(void)
 {
 	esp_err_t	ret;
 
+
+
+
+	/* All rotary encoders have to be configured at once. Here we set up
+         * two encoders */
+
 	rotary_config_t	rconf[2];
-
 	memset(rconf, 0, sizeof(rotary_config_t) * 2);
-
+	
 	rconf[0].rc_pin_a = 7;
 	rconf[0].rc_pin_b = 8;
 	rconf[0].rc_pin_switch = 9;
+	rconf[0].rc_style = ROT_STYLE_BOUND; /* Will not go over min and max */
+	rconf[0].rc_max = 0;
+	rconf[0].rc_min = 100;
+	rconf[0].rc_start = 0;
 
-	rconf[1].rc_style = ROT_STYLE_WRAPAROUND;
+	rconf[1].rc_pin_a = 4;
+	rconf[1].rc_pin_b = 5;
+	rconf[1].rc_pin_switch = 6;
+	rconf[1].rc_style = ROT_STYLE_WRAPAROUND; /* Value will wrap around */
 	rconf[1].rc_max = 30;
 	rconf[1].rc_min = -10;
 	rconf[1].rc_start = 10;
 	
-	rconf[1].rc_pin_a = 4;
-	rconf[1].rc_pin_b = 5;
-	rconf[1].rc_pin_switch = 6;
+	/* gpio_install_isr_service() must be called before rotary_config().
+	 * Since it should only be called once it is left to the caller to
+	 * decide when it's best to do it. */
 
 	ESP_GOTO_ON_ERROR(gpio_install_isr_service(0), err_label, logtag,
 	    "Could not install gpio ISR Service");
@@ -492,35 +504,10 @@ app_main(void)
 		goto err_label;
 	}	
 
-printf("here\n");
-
-#if 0
-	ESP_GOTO_ON_ERROR(gpio_install_isr_service(0), err_label, logtag,
-	    "Could not install gpio ISR Service");
-
-	/* Rotary A: input, interrupt */
-	ESP_GOTO_ON_ERROR(config_gpio(GPIO_ROT_A, 1, isr_rotary, NULL),
-	    err_label, logtag, "Could not configure pin %d", GPIO_ROT_A);
-
-	/* Rotary B: input, no interrupt */
-	ESP_GOTO_ON_ERROR(config_gpio(GPIO_ROT_B, 1, isr_rotary, NULL),
-	    err_label, logtag, "Could not configure pin %d", GPIO_ROT_B);
-
-	/* Rotary Switch: input, interrupt */
-	ESP_GOTO_ON_ERROR(config_gpio(GPIO_SWITCH, 1, isr_rotary_switch, NULL),
-	    err_label, logtag, "Could not configure pin %d", GPIO_SWITCH);
-
-#endif
-
 	/* LED to blink: output, no interrupt */
 	ESP_GOTO_ON_ERROR(config_led_gpio(GPIO_BLINK), err_label,
 	    logtag, "Could not configure LED on pin %d", GPIO_BLINK);
 
-printf("here2\n");
-
-printf("here3\n");
-
-printf("here4\n");
 
 err_label:
 
