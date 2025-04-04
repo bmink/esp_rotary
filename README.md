@@ -166,12 +166,11 @@ The following constants are defined:
 
 ## Rotary encoder state machine
 
-Just like any other type of switch, rotary encoders have to be debounced.  A
-naive implementation would simply look at B when A goes active (ie. is
-falling): if B is active (=low) then it's a step clockwise; if B is not active
-(=high) then it's a step counter-clockwise. The issue with this is signal
-bounce as contact is made within the encoder. This will result in the counting
-of unpredictable extra steps in either direction.
+To determine rotary motion, a naive implementation would simply look at B when
+A goes active (ie. goes low): if B is active (=low) then it's a step clockwise;
+if B is not active (=high) then it's a step counter-clockwise. The issue with
+this is signal bounce as contact is made within the encoder. This will result
+in the counting of unpredictable extra steps in either direction.
 
 We could do a delay-based debounce, which could work but at higher spin speeds
 would start to miss steps.
@@ -200,7 +199,7 @@ Pins     /- LH <- LL <- HL <- HH -> LH -> LL -> HL -\
 ```
 
 We start in IDLE, when both pins are inactive. When the rotary encoder is
-turned, the state machine will 100start advancing in the direction indicated by
+turned, the state machine will start advancing in the direction indicated by
 the pin values. Due to bounce, during each state change it may oscillate back
 and forth between the states a number of times.
 
