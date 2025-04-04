@@ -1,5 +1,0 @@
-build
-sdkconfig*
-**/*.swp
-CMakeLists.txt
-.gitignore
