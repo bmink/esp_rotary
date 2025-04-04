@@ -16,23 +16,23 @@ count value and switch status at any time
 # Using the driver
 
 ## Setup
-The public interface is defined in `esp_rotary.h`.
+Applications should include `esp_rotary.h`.
 
-Encoders are set up and configured via the `rotary_config()` call which takes
-an array of `rotary_config_t` structs. All encoders have to be configured at
-once, repeated calls to `rotary_config()` are not allowed.
+Encoders are set up and configured via `rotary_config()` which takes an array
+of `rotary_config_t` structs. All encoders have to be configured at once,
+repeated calls to `rotary_config()` are not allowed.
 
 `rotary_config()` will configure the gpio pins, interrupts, internal event
 queues and state machines (see "Implementation Notes" below).
 
-Example configuration:
+Example configuration code:
 
 ```
-rotary_config_t rconf[2];
-memset(rconf, 0, sizeof(rotary_config_t) * 2);
-
 /* All rotary encoders have to be configured at once. Here we set up
  * two encoders: */
+
+rotary_config_t rconf[2];
+memset(rconf, 0, sizeof(rotary_config_t) * 2);
 
 rconf[0].rc_pin_a = 7;
 rconf[0].rc_pin_b = 8;
@@ -64,8 +64,8 @@ directly.
 
 Upon successful initialization, a queue named `rotary_event_queue` becomes
 available. The application can wait on this queue to receive events of type
-`rotary_event_t`. Each event contails with the index of the encoder that is
-sending the event, the type of the event (value increment/decrement, switch
+`rotary_event_t`. Each event contains the index of the encoder that is
+sending the event, the type of the event (value increment/decrement, button
 press or release, as well as the encoder's value.
 
 Example usage of the rotary encoder event queue:
@@ -91,7 +91,7 @@ while(1) {
 		printf("Rotary %d button pressed\n", rev.re_idx);
 		break;
 	case ROT_EVENT_BUTTON_RELEASE:
-		printf("Rotary %d switch released\n", rev.re_idx);
+		printf("Rotary %d button released\n", rev.re_idx);
 		break;
 	default:
 		/* Not reached */
@@ -103,12 +103,12 @@ while(1) {
 ## Reading values directly
 
 Values can also be read using the function `rotary_get_value()`. Similarly,
-button state can be read with `rotary_get_switch_state()`.
+button state can be read with `rotary_get_button_state()`.
 
 These calls are nonblocking and can be used without needing any synchronization
 mechanism (that is all handled internally).
 
-Example of reading rotary value and switch state directly:
+Example of reading rotary value and button state directly:
 
 ```
 TODO
