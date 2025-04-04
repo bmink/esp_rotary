@@ -1,6 +1,6 @@
 # esp_rotary
 
-Accurate & feature rich rotary encoder driver for ESP32. Will not
+Accurate & feature-rich rotary encoder driver for ESP32. Will not
 miss or count extra steps even when turned very fast.
 
 Features:
@@ -34,17 +34,18 @@ Example configuration code:
 rotary_config_t rconf[2];
 memset(rconf, 0, sizeof(rotary_config_t) * 2);
 
-rconf[0].rc_pin_a = 7;
-rconf[0].rc_pin_b = 8;
-rconf[0].rc_pin_switch = 9;
+rconf[0].rc_pin_a = 4;
+rconf[0].rc_pin_b = 5;
+rconf[0].rc_pin_switch = 6;
 rconf[0].rc_style = ROT_STYLE_BOUND; /* Will not go over min and max */
-rconf[0].rc_max = 0;
-rconf[0].rc_min = 100;
+rconf[0].rc_min = 0;
+rconf[0].rc_max = 100000;
 rconf[0].rc_start = 0;
+rconf[0].rc_enable_speed_boost = 1; /* Enable speed boost mode */
 
-rconf[1].rc_pin_a = 4;
-rconf[1].rc_pin_b = 5;
-rconf[1].rc_pin_switch = 6;
+rconf[1].rc_pin_a = 7;
+rconf[1].rc_pin_b = 8;
+rconf[1].rc_pin_switch = 9;
 rconf[1].rc_style = ROT_STYLE_WRAPAROUND; /* Value will wrap around */
 rconf[1].rc_max = 30;
 rconf[1].rc_min = -10;

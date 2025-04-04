@@ -302,7 +302,8 @@ printf("Entering event loop\n");
 				/* Check speed boost */
 				now = xTaskGetTickCount();
 				diff = now - rot->ro_last_valchange;
-				if(diff < ROTARY_SPEED_BOOST_FAST_TICKS) {
+				if(rot->ro_conf.rc_enable_speed_boost &&
+				    diff < ROTARY_SPEED_BOOST_FAST_TICKS) {
 					if(((statech & COUNT_INCR) &&
 				           (rot->ro_last_valchange_dir > 0)) ||
 					   ((statech & COUNT_DECR) &&
@@ -619,16 +620,17 @@ app_main(void)
 	rconf[0].rc_pin_b = 8;
 	rconf[0].rc_pin_button = 9;
 	rconf[0].rc_style = ROT_STYLE_BOUND; /* Will not go over min and max */
-	rconf[0].rc_max = 0;
-	rconf[0].rc_min = 100;
+	rconf[0].rc_min = 0;
+	rconf[0].rc_max = 100000;
 	rconf[0].rc_start = 0;
+	rconf[0].rc_enable_speed_boost = 1;
 
 	rconf[1].rc_pin_a = 4;
 	rconf[1].rc_pin_b = 5;
 	rconf[1].rc_pin_button = 6;
 	rconf[1].rc_style = ROT_STYLE_WRAPAROUND; /* Value will wrap around */
-	rconf[1].rc_max = 30;
 	rconf[1].rc_min = -10;
+	rconf[1].rc_max = 30;
 	rconf[1].rc_start = 10;
 	
 	ret = rotary_config(rconf, 2);
