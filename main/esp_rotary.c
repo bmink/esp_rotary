@@ -104,10 +104,10 @@ rotary_get_value(unsigned char idx)
  * implement a state machine to go through the pin value stages of CW or CCW
  * rotation in order.
  * 
- * This will essentially eliminate bounce, since bounce will manifest as
- * the state machine harmlessly advancing / reverting steps. However, once
- * we complete an *entire* go around in state changes, we can be sure that
- * this was no coincidence and count it as a rotary increment or decrement.
+ * This will eliminate bounce, since bounce will manifest as the state machine
+ * harmlessly advancing / reverting steps. However, once we complete an
+ * *entire* go around in state changes, we can be sure that this was no
+ * coincidence and count it as a rotary increment or decrement.
  * 
  * The following graphic illustrates the states. The "Pins" line shows the
  * state of pins A and B. For example, "HH" means both A and B are high
