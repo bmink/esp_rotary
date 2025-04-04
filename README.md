@@ -172,8 +172,8 @@ if B is not active (=high) then it's a step counter-clockwise. The issue with
 this is signal bounce as contact is made within the encoder. This will result
 in the counting of unpredictable extra steps in either direction.
 
-We could do a delay-based debounce, which could work but at higher spin speeds
-would start to miss steps.
+A delay-based debounce might work, but already at moderately high turn speeds
+it would start to miss steps.
 
 A better idea is to take advantage of the fact that we *do* have two inputs
 that go active/inactive, offset from one another, and in a pattern that's
