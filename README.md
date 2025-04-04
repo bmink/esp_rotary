@@ -105,8 +105,8 @@ while(1) {
 Values can also be read using the function `rotary_get_value()`. Similarly,
 button state can be read with `rotary_get_button_state()`.
 
-These calls are nonblocking and can be used without needing any synchronization
-mechanism (that is all handled internally).
+These calls are nonblocking and can be used without any further synchronization
+(all that is handled internally).
 
 Example of reading rotary value and button state directly:
 
