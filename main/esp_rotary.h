@@ -20,7 +20,7 @@ typedef struct rotary_config {
 
 	unsigned char		rc_pin_a;
 	unsigned char		rc_pin_b;
-	unsigned char		rc_pin_switch;
+	unsigned char		rc_pin_button;
 
 
 } rotary_config_t;
@@ -28,20 +28,20 @@ typedef struct rotary_config {
 esp_err_t rotary_config(rotary_config_t *, unsigned char);
 
 
-typedef enum rotary_switch_state {
-	SWITCH_NOTPRESSED,
-	SWITCH_PRESSED
-} rotary_switch_state_t;
+typedef enum rotary_button_state {
+	BUTTON_NOTPRESSED,
+	BUTTON_PRESSED
+} rotary_button_state_t;
 
 int32_t	rotary_get_value(unsigned char);
-rotary_switch_state_t rotary_get_switch_state(unsigned char);
+rotary_button_state_t rotary_get_switch_state(unsigned char);
 
 
 typedef enum rotary_event_type {
 	ROT_EVENT_INCREMENT,
 	ROT_EVENT_DECREMENT,
-	ROT_EVENT_SWITCH_PRESS,
-	ROT_EVENT_SWITCH_RELEASE
+	ROT_EVENT_BUTTON_PRESS,
+	ROT_EVENT_BUTTON_RELEASE
 } rotary_event_type_t;
 
 
@@ -52,7 +52,6 @@ typedef struct rotary_event {
 } rotary_event_t;
 
 extern QueueHandle_t	rotary_event_queue;
-
 
 
 #endif

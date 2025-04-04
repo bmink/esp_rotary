@@ -16,12 +16,15 @@ typedef struct rotary {
 	unsigned char	ro_state;
 	
 	QueueHandle_t 	ro_value_mailb;
-	QueueHandle_t 	ro_switch_state_mailb;
-	
+	QueueHandle_t 	ro_button_state_mailb;
+
+	TickType_t	ro_last_valchange;
+	signed char	ro_last_valchange_dir;
 } rotary_t;
 
 static rotary_t	*rotary = NULL;
 static unsigned char rotary_cnt = 0;	
+QueueHandle_t rotary_event_queue = NULL;
 
 
 
@@ -54,13 +57,44 @@ rot_get_val(rotary_t *rot, int32_t *val)
 }
 
 
+esp_err_t
+rot_set_button_state(rotary_t *rot, const rotary_button_state_t val)
+{
+	int	ret;
+	if(rot == NULL)
+		return ESP_ERR_INVALID_ARG;
+
+	ret = xQueueOverwrite(rot->ro_button_state_mailb, &val);
+	if(ret != pdPASS)
+		return ESP_FAIL;
+	else
+		return ESP_OK;
+}
+
+
+int32_t
+rotary_get_value(unsigned char idx)
+{
+	int32_t	val;
+	int	ret;
+
+	if(rotary == NULL || idx >= rotary_cnt)
+		return 0;
+	
+	ret = rot_get_val(&rotary[idx], &val);
+	if(ret != pdPASS)
+		return 0;
+
+	return val;
+}
+
 /* A naive implementation would simply look at B when A goes active (ie. is
  * falling): if B is active (=low) then it's a step clockwise; if B is not
  * active (=high) then it's a step counter-clockwise. The issue with this is
  * signal bounce as contact is made within the encoder. This will result in
  * the counting of unpredictable extra steps in either direction. 
  *
- * We could do a time-based debounce, which could work but at higher spin
+ * We could do a delay-based debounce, which could work but at higher spin
  * speeds would start to miss steps.
  *
  * A better idea is to take advantage of the fact that we *do* have two
@@ -86,7 +120,7 @@ rot_get_val(rotary_t *rot, int32_t *val)
  *          \------->------->----/\-----<-------<------/
  *
  * We start in IDLE, when both pins are inactive. When the rotary encoder is
- * turned, the state machine will 100start advancing in the direction indicated by 
+ * turned, the state machine will start advancing in the direction indicated by
  * the pin values. Due to bounce, during each state change it may oscillate
  * back and forth between the states a number of times.
  * 
@@ -178,15 +212,14 @@ static char rot_state_change[STATE_CNT][4] = {
  *  7 6 5 4 3 2 1 0
  *  | | | | | | | +- status of rotary B
  *  | | | | | | +--- status of rotary A
- *  | | | | | +----- status of switch (0=open, 1=closed)
+ *  | | | | | +----- status of button (0=notpressed, 1=pressed)
  *  | | | | +------- not used
  *  | | | +--------- not used
  *  | | +----------- not used
  *  | +------------- not used
- *  +--------------- event type (1 - rotary, 0 - switch)
+ *  +--------------- event type (1 - rotary, 0 - button)
  */
 
-#define EVENT_QUEUE_SIZ	10
 static QueueHandle_t isr_event_queue = NULL;
 
 void
@@ -212,18 +245,6 @@ isr_rotary(void *arg)
 }
 
 
-void
-isr_switch(void *arg)
-{
-#if 0
-	int	rotary_idx;
-
-	rotary_idx = (uint32_t) arg;
-#endif
-}
-
-
-
 static void
 event_loop(void *arg)
 {
@@ -235,7 +256,10 @@ event_loop(void *arg)
 	int32_t		val;
 	int		ret;
 	int		changed;
-	int		i;
+	rotary_event_t	rev;
+	TickType_t	now;
+	TickType_t	diff;
+	int		absincr;
 
 printf("Rotary size: %d\n", sizeof(rotary_t));
 printf("Entering event loop\n");
@@ -264,58 +288,109 @@ printf("Entering event loop\n");
 			rot->ro_state = statech & 0xf;
 
 			if(statech & (COUNT_INCR | COUNT_DECR)) {
+				memset(&rev, 0, sizeof(rotary_event_t));
+				rev.re_idx = idx;
+
 				ret  = rot_get_val(rot, &val);
 				if(ret != pdPASS)
 					continue;
 
+				absincr = 1;	/* Default is increment or
+						 * decrement by 1 */
+
+				/* Check speed boost */
+				now = xTaskGetTickCount();
+				diff = now - rot->ro_last_valchange;
+				if(diff < ROTARY_SPEED_BOOST_FAST_TICKS) {
+					if(((statech & COUNT_INCR) &&
+				           (rot->ro_last_valchange_dir > 0)) ||
+					   ((statech & COUNT_DECR) &&
+				           (rot->ro_last_valchange_dir < 0))) {
+						absincr = 
+					  ROTARY_SPEED_BOOST_FAST_VALUE_CHANGE;
+					}
+				}
+
+printf("absincr=%d\n", absincr);
+
 				if(statech & COUNT_INCR) {
+					rev.re_type = ROT_EVENT_INCREMENT;
 					switch(rot->ro_conf.rc_style) {
 					case ROT_STYLE_BOUND:
-						if(val < rot->ro_conf.rc_max) {
-							++val;
-							++changed;
-						}
+						if(val == rot->ro_conf.rc_max)
+							break;
+
+						/* Check for overflow */
+						if(rot->ro_conf.rc_max - val
+						    >= absincr)
+							val += absincr;
+						else
+						   val = rot->ro_conf.rc_max;
+
+						++changed;
 						break;
 
 					case ROT_STYLE_WRAPAROUND:
 					default:
-						if(val == rot->ro_conf.rc_max)
-						    val = rot->ro_conf.rc_min;
+						/* Check for overflow */
+						if(rot->ro_conf.rc_max - val
+                                                    >= absincr)
+							val += absincr;
 						else
-						    ++val;
+						    val = rot->ro_conf.rc_min +
+						    (rot->ro_conf.rc_max - val);
+
 						++changed;
 						break;
 					}
 				}
 				else { /* COUNT_DECR */	
+					rev.re_type = ROT_EVENT_DECREMENT;
 					switch(rot->ro_conf.rc_style) {
 					case ROT_STYLE_BOUND:
-						if(val > rot->ro_conf.rc_min) {
-							--val;
-							++changed;
-						}
+						if(val == rot->ro_conf.rc_min)
+							break;
+
+						/* Check for overflow */
+						if(val - rot->ro_conf.rc_min
+						    >= absincr)
+							val -= absincr;
+						else
+						   val = rot->ro_conf.rc_min;
+
+						++changed;
 						break;
 
 					case ROT_STYLE_WRAPAROUND:
 					default:
-						if(val == rot->ro_conf.rc_min)
-						    val = rot->ro_conf.rc_max;
+						/* Check for overflow */
+						if(val - rot->ro_conf.rc_min
+                                                    >= absincr)
+							val -= absincr;
 						else
-						    --val;
+						    val = rot->ro_conf.rc_max -
+						    (val - rot->ro_conf.rc_min);
+
 						++changed;
 						break;
 					}
 				}
+
 				if(changed)
 					rot_set_val(rot, val);
+
+				rot->ro_last_valchange = now;
+				if(statech & COUNT_INCR)
+					rot->ro_last_valchange_dir = 1;
+				else /* COUNT_DECR */
+					rot->ro_last_valchange_dir = -1;
 			}
 
+			
+
 			if(changed) {
-				for(i = 0; i < rotary_cnt; ++i) {
-					rot_get_val(&rotary[i], &val);
-					printf("%2d = %4"PRId32" ", i, val);
-				}
-				printf("\n");	
+				rev.re_value = val;
+				xQueueSend(rotary_event_queue, &rev, 0);
 			}
 			
 		} else
@@ -327,7 +402,35 @@ printf("Entering event loop\n");
 		//    uxTaskGetStackHighWaterMark(NULL));
 	}
 }
-	  
+
+
+/* For button debounce, we implement the Jack Ganssle debounce idea that
+ * is documented in several places on the web. */
+
+static void
+button_loop(void *arg)
+{
+#if 0
+	uint32_t 	a_value;
+	uint32_t 	b_value;
+	uint32_t	regs;
+	unsigned char	idx;
+	uint16_t	event;
+
+	/* Since we are in an ISR, we are checking the pin value by accessing
+	 * the GPIO input register directly */
+	idx = (uint32_t) arg;
+
+	regs = (REG_READ(GPIO_IN_REG));
+	a_value = (regs >> rotary[idx].ro_conf.rc_pin_a) & 1;
+	b_value = (regs >> rotary[idx].ro_conf.rc_pin_b) & 1;
+
+	event = ((uint16_t)idx) << 8 | (a_value << 1) | b_value | (1 << 7);
+
+	xQueueSendFromISR(isr_event_queue, &event, NULL);
+#endif
+} 
+
 
 int
 config_led_gpio(int pinnr)
@@ -350,8 +453,6 @@ config_led_gpio(int pinnr)
 	return 0;
 }
 
-
-#define ROT_EVENT_LOOP_PRIORITY	10
 
 esp_err_t
 rotary_config(rotary_config_t *rconf, unsigned char cnt)
@@ -400,7 +501,7 @@ rotary_config(rotary_config_t *rconf, unsigned char cnt)
 
 		config.pin_bit_mask |= 1ULL << conf->rc_pin_a;
 		config.pin_bit_mask |= 1ULL << conf->rc_pin_b;
-		config.pin_bit_mask |= 1ULL << conf->rc_pin_switch;
+		config.pin_bit_mask |= 1ULL << conf->rc_pin_button;
 
 		ret = gpio_isr_handler_add(conf->rc_pin_a, isr_rotary,
 		    (void *) i);
@@ -416,17 +517,16 @@ rotary_config(rotary_config_t *rconf, unsigned char cnt)
 			goto end_label;
 		}
 
-#if 0
-		ret = gpio_isr_handler_add(conf->rc_pin_switch, isr_switch,
-		    (void *) i);
+		rot->ro_value_mailb = xQueueCreate(1, sizeof(int32_t));
+		ret = rot_set_val(rot, conf->rc_start);
 		if(ret != ESP_OK) {
 			err = ret;
 			goto end_label;
 		}
-#endif
 
-		rot->ro_value_mailb = xQueueCreate(1, sizeof(int32_t));
-		ret = rot_set_val(rot, conf->rc_start);
+		rot->ro_button_state_mailb = xQueueCreate(1,
+		    sizeof(rotary_button_state_t));
+		ret = rot_set_button_state(rot, BUTTON_NOTPRESSED);
 		if(ret != ESP_OK) {
 			err = ret;
 			goto end_label;
@@ -442,26 +542,52 @@ rotary_config(rotary_config_t *rconf, unsigned char cnt)
 		goto end_label;
 	}
 
-	isr_event_queue = xQueueCreate(EVENT_QUEUE_SIZ, sizeof(uint16_t));
+	isr_event_queue = xQueueCreate(ROTARY_ISR_QUEUE_SIZE,
+	    sizeof(uint16_t));
 	if(isr_event_queue == NULL) {
+		err = ESP_FAIL;
+		goto end_label;
+	}
+
+	rotary_event_queue = xQueueCreate(ROTARY_EVENT_QUEUE_SIZE,
+	    sizeof(rotary_event_t));
+	if(rotary_event_queue == NULL) {
 		err = ESP_FAIL;
 		goto end_label;
 	}
 
 	rotary_cnt = cnt;
 
-	ret = xTaskCreate(event_loop, "event_loop", 4096, NULL,
-	    ROT_EVENT_LOOP_PRIORITY, NULL);
+	ret = xTaskCreate(event_loop, "rotary_event_loop",
+	    ROTARY_ISR_EVENT_TASK_HEAP, NULL, ROTARY_ISR_EVENT_TASK_PRIORITY,
+	    NULL);
 	if(ret != pdPASS) {
+		err = ESP_FAIL;
 		goto end_label;
-	} else
-		ret = ESP_OK;
+	}
+
+	ret = xTaskCreate(button_loop, "rotary_button_loop",
+	    ROTARY_BUTTON_TASK_HEAP, NULL, ROTARY_BUTTON_TASK_PRIORITY, NULL);
+	if(ret != pdPASS) {
+		err = ESP_FAIL;
+		goto end_label;
+	}
 
 end_label:
 
-	if(err != ESP_OK && rotary != NULL) {
-		free(rotary);
-		rotary_cnt = 0;
+	if(err != ESP_OK) {
+		if(rotary != NULL) {
+			free(rotary);
+			rotary_cnt = 0;
+		}
+		if(rotary_event_queue != NULL) {
+			vQueueDelete(rotary_event_queue);
+			rotary_event_queue = NULL;
+		}
+		if(isr_event_queue != NULL) {
+			vQueueDelete(isr_event_queue);
+			isr_event_queue = NULL;
+		}
 	}
 
 	return err;
@@ -479,11 +605,10 @@ void
 app_main(void)
 {
 	esp_err_t	ret;
+	rotary_event_t	rev;
 
 
-
-
-	/* All rotary encoders have to be configured at once. Here we set up
+	/* Rotary encoders have to be configured all at once. Here we set up
          * two encoders */
 
 	rotary_config_t	rconf[2];
@@ -491,7 +616,7 @@ app_main(void)
 	
 	rconf[0].rc_pin_a = 7;
 	rconf[0].rc_pin_b = 8;
-	rconf[0].rc_pin_switch = 9;
+	rconf[0].rc_pin_button = 9;
 	rconf[0].rc_style = ROT_STYLE_BOUND; /* Will not go over min and max */
 	rconf[0].rc_max = 0;
 	rconf[0].rc_min = 100;
@@ -499,7 +624,7 @@ app_main(void)
 
 	rconf[1].rc_pin_a = 4;
 	rconf[1].rc_pin_b = 5;
-	rconf[1].rc_pin_switch = 6;
+	rconf[1].rc_pin_button = 6;
 	rconf[1].rc_style = ROT_STYLE_WRAPAROUND; /* Value will wrap around */
 	rconf[1].rc_max = 30;
 	rconf[1].rc_min = -10;
@@ -515,6 +640,40 @@ app_main(void)
 	ESP_GOTO_ON_ERROR(config_led_gpio(GPIO_BLINK), err_label,
 	    logtag, "Could not configure LED on pin %d", GPIO_BLINK);
 
+#if 1
+
+	while(1) {
+		if(xQueueReceive(rotary_event_queue, &rev, portMAX_DELAY) !=
+		   pdPASS)
+			continue;
+
+		switch(rev.re_type) {
+		case ROT_EVENT_INCREMENT:
+			printf("Rotary %d value incremented to %"PRId32"\n",
+				rev.re_idx, rev.re_value);
+			break;
+		case ROT_EVENT_DECREMENT:
+			printf("Rotary %d value decremented to %"PRId32"\n",
+				rev.re_idx, rev.re_value);
+			break;
+		case ROT_EVENT_BUTTON_PRESS:
+			printf("Rotary %d switch pressed\n", rev.re_idx);
+			break;
+		case ROT_EVENT_BUTTON_RELEASE:
+			printf("Rotary %d switch released\n", rev.re_idx);
+			break;
+		default:
+			printf("Rotary %d unknown event\n", rev.re_idx);
+			break;
+		}
+	}
+#else
+	for(int i = 0; i < 2; ++i) {
+		printf("%2d: val=%4"PRId32" , switch=\n",
+		    i, rotary_get_value(i));
+	}
+	printf("\n");	
+#endif
 
 err_label:
 

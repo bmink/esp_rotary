@@ -6,16 +6,16 @@ miss or count extra steps even when turned very fast.
 Features:
 * Value counting is done with a state machine to ensure reliable increment /
 decrement counting
-* Multiple rotary count modes: "infinite", bound, wraparound
+* Multiple rotary count modes: bound, wraparound
 * Optional "speed boost" mode: if the knob is turned fast, a multiplier is
 applied to the increments / decrements
 * Callers receive turn and switch events via a queue *and* also can read
 count value and switch status at any time
 * Switch has software debounce
 
-## Using the driver
+# Using the driver
 
-### Setup
+## Setup
 The public interface is defined in `esp_rotary.h`.
 
 Encoders are set up and configured via the `rotary_config()` call which takes
@@ -60,7 +60,7 @@ The encoders are now up and running and ready to be used. There are two ways
 applications can use encoders: using the event queue or reading values
 directly.
 
-### Rotary encoder event queue
+## Rotary encoder event queue
 
 Upon successful initialization, a queue named `rotary_event_queue` becomes
 available. The application can wait on this queue to receive events of type
@@ -71,11 +71,36 @@ press or release, as well as the encoder's value.
 Example usage of the rotary encoder event queue:
 
 ```
-TODO
+rotary_event_t	rev;
+
+
+while(1) {
+	if(xQueueReceive(rotary_event_queue, &rev, portMAX_DELAY) != pdPASS)
+		continue;
+
+	switch(rev.re_type) {
+	case ROT_EVENT_INCREMENT:
+		printf("Rotary %d value incremented to %"PRId32"\n",
+		    rev.re_idx, rev.re_value);
+		break;
+	case ROT_EVENT_DECREMENT:
+		printf("Rotary %d value decremented to %"PRId32"\n",
+		    rev.re_idx, rev.re_value);
+		break;
+	case ROT_EVENT_BUTTON_PRESS:
+		printf("Rotary %d button pressed\n", rev.re_idx);
+		break;
+	case ROT_EVENT_BUTTON_RELEASE:
+		printf("Rotary %d switch released\n", rev.re_idx);
+		break;
+	default:
+		/* Not reached */
+		break;
+	}
+}
 ```
 
-
-### Reading values directly
+## Reading values directly
 
 Values can also be read using the function `rotary_get_value()`. Similarly,
 button state can be read with `rotary_get_switch_state()`.
@@ -90,7 +115,7 @@ TODO
 ```
 
 
-### Compile-time configuration options
+## Compile-time configuration options
 
 `rotary_params.h` contains constants that can be modified to the application's
 needs. Most of these are fine to leave alone. The only one to pay attention to
@@ -112,21 +137,21 @@ The following constants are defined:
 #define ROTARY_ISR_EVENT_TASK_PRI 10
         /* Priority of esp_rotary's internal event management task. */
 
-#define ROTARY_SWITCH_DEBOUNCE_MS 50
-        /* Milliseconds delay for the switch debounce logic */
+#define ROTARY_SWITCH_DEBOUNCE_TICKS pdMS_TO_TICKS(50)
+        /* Ticks delay for the switch debounce logic */
 
-#define ROTARY_SPEED_BOOST_MEDIUM_MS 20
-        /* Milliseconds between value changes under which the medium boost
+#define ROTARY_SPEED_BOOST_MEDIUM_TICKS pdMS_TO_TICKS(20)
+        /* Ticks between value changes under which the medium boost
          * mode will engage */
 
-#define ROTARY_SPEED_BOOST_MEDIUM_VALUE_CHANGE 2
+#define ROTARY_SPEED_BOOST_MEDIUM_VALUE_CHANGE 5
         /* Value change to apply in medium boost mode  */
 
-#define ROTARY_SPEED_BOOST_FAST_MS 20
-        /* Milliseconds between value changes under which the fast boost
+#define ROTARY_SPEED_BOOST_FAST_TICKS pdMS_TO_TICKS(10)
+        /* Ticks between value changes under which the fast boost
          * mode will engage */
 
-#define ROTARY_SPEED_BOOST_FAST_VALUE_CHANGE 4
+#define ROTARY_SPEED_BOOST_FAST_VALUE_CHANGE 10
         /* Value change to apply in fast boost mode  */
 
 #define ROTARY_EVENT_QUEUE_SIZE 10
@@ -137,8 +162,56 @@ The following constants are defined:
 ```
 
 
-## Implementation notes
+# Implementation notes
 
-### Rotary encoder state machine
+## Rotary encoder state machine
 
+Just like any other type of switch, rotary encoders have to be debounced.  A
+naive implementation would simply look at B when A goes active (ie. is
+falling): if B is active (=low) then it's a step clockwise; if B is not active
+(=high) then it's a step counter-clockwise. The issue with this is signal
+bounce as contact is made within the encoder. This will result in the counting
+of unpredictable extra steps in either direction.
+
+We could do a delay-based debounce, which could work but at higher spin speeds
+would start to miss steps.
+
+A better idea is to take advantage of the fact that we *do* have two inputs
+that go active/inactive, offset from one another, and in a pattern that's
+unique for the CW / CCW directions. This means that we can implement a state
+machine to go through the pin value stages of CW or CCW rotation in order.
+
+This will essentially eliminate bounce, since bounce will manifest as the state
+machine harmlessly advancing / reverting steps. However, once we complete an
+*entire* go around in state changes, we can be sure that this was no
+coincidence and count it as a rotary increment or decrement.
+
+The following graphic illustrates the states. The "Pins" line shows the state
+of pins A and B. For example, "HH" means both A and B are high (inactive) and
+"HL" means A is high and B is low.
+
+```
+State      CCW3  CCW2  CCW1  IDLE   CW1   CW2   CW3
+Pins     /- LH <- LL <- HL <- HH -> LH -> LL -> HL -\
+         |                    ||                    |
+         v                    ^^                    v
+         |      (decrement)   ||    (increment)     |
+         \------->------->----/\-----<-------<------/
+```
+
+We start in IDLE, when both pins are inactive. When the rotary encoder is
+turned, the state machine will 100start advancing in the direction indicated by
+the pin values. Due to bounce, during each state change it may oscillate back
+and forth between the states a number of times.
+
+When a full go-around has been completed, the step increment or decrement is
+noted. What's most important to understand is that the steps CW3->IDLE and
+CCW3->IDLE *only* result in an increment / decrement respectively, if a *whole*
+loop has been completed. Temporary bounce back and forth between IDLE and
+CW1/CCW1 will not result in the counter changing.
+
+If at any point in the state machine we encounter an input that's not allowed
+for the state we are in, we ignore that input except for HH, in which case we
+reset the state machine to IDLE. This is a failsafe to get back to a known
+state if somehow the steps or signals got messed up.
 
