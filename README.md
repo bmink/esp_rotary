@@ -5,7 +5,7 @@ miss or count extra steps even when turned very fast.
 
 Features:
 * Value counting is done with a state machine to ensure reliable increment /
-decrement counting
+decrement counting (see "Implementation Notes" below)
 * Multiple rotary count modes: bound, wraparound
 * Optional "speed boost" mode: if the knob is turned fast, a multiplier is
 applied to the increments / decrements
@@ -177,8 +177,9 @@ it would start to miss steps.
 
 A better idea is to take advantage of the fact that we *do* have two inputs
 that go active/inactive, offset from one another, and in a pattern that's
-unique for the CW / CCW directions. This means that we can implement a state
-machine to go through the pin value stages of CW or CCW rotation in order.
+unique for the clockwise / counterclockwise directions. This means that we can
+implement a state machine to go through the pin value stages of CW or CCW
+rotation in order.
 
 This will eliminate bounce, since bounce will manifest as the state machine
 harmlessly advancing / reverting steps. However, once we complete an *entire*
