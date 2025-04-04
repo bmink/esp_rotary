@@ -16,7 +16,7 @@ count value and switch status at any time
 # Using the driver
 
 ## Setup
-Applications should include `esp_rotary.h`.
+Applications should `#include "esp_rotary.h"`.
 
 Encoders are set up and configured via `rotary_config()` which takes an array
 of `rotary_config_t` structs. All encoders have to be configured at once,
