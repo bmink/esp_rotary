@@ -27,7 +27,7 @@ queues and state machines (see "Implementation Notes" below).
 
 Example configuration code:
 
-```
+```C
 /* All rotary encoders have to be configured at once. Here we set up
  * two encoders: */
 
