@@ -71,7 +71,7 @@ press or release, as well as the encoder's value.
 
 Example usage of the rotary encoder event queue:
 
-```
+```C
 rotary_event_t	rev;
 
 
