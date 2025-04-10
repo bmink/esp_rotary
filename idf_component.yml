@@ -1,0 +1,6 @@
+vesion: "1.0.0"
+description: "Driver for rotary encoders"
+url: "http://bmink.tech"
+dependencies:
+  idf:
+    version: ">=4.1.0"

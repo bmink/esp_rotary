@@ -1,0 +1,91 @@
+menu "Rotary Encoders"
+
+	menu "General config"
+		config ROTARY_CALL_GPIO_INSTALL_ISR_SERVICE
+		bool "Call gpio_install_isr_service()"
+		default y
+		help
+			If enabled, rotary_config() will call
+			gpio_install_isr_service().
+			Disable if your application will call it (make sure
+			it is called before rotary_config()
+
+		config ROTARY_GPIO_INSTALL_ISR_SERVICE_FLAGS
+		int "Flags for gpio_install_isr_service()"
+		default 0
+		help
+			Flags to call gpio_install_isr_service() with.
+
+		config ROTARY_EVENT_QUEUE_SIZE
+		int "Size of rotary_event_queue"
+		default 10
+		help
+			Size of rotary_event_queue
+
+		config ROTARY_ISR_QUEUE_SIZE
+		int "Size of esp_rotary's internal ISR event queue"
+		default 10
+		help
+			Size of esp_rotary's internal ISR event queue
+
+		config ROTARY_ISR_EVENT_TASK_PRIORITY
+		int "Priority of esp_rotary's internal event management task"
+		default 10
+		help
+			Priority of esp_rotary's internal event management task.	
+		config ROTARY_ISR_EVENT_TASK_HEAP
+		int "Size of the internal ISR event task heap"
+		default 4096
+		help
+			Size of the internal ISR event task heap
+
+		config ROTARY_BUTTON_TASK_PRIORITY
+		int "Priority of esp_rotary's internal button task"
+		default 10
+		help
+			Priority of esp_rotary's internal button task
+
+		config ROTARY_BUTTON_TASK_HEAP
+		int "Size of the button task heap"
+		default 4096
+		help
+			Size of the button task heap
+		
+	endmenu
+
+	menu "Speed Boost"
+		config ROTARY_SPEED_BOOST_MS
+		int "Milliseconds to activate"
+		default 10
+		help
+			If two clicks of the rotary encoder are closer together
+			than this time period, speed boost will be activated.
+
+		config ROTARY_SPEED_BOOST_VALUE_CHANGE
+		int "Value change"
+		default 10
+		help
+			Value increase / decrease per rotary click if speed
+			boost is active.
+
+	endmenu
+
+	menu "Button"
+		config ROTARY_BUTTON_DEBOUNCE_SAMPLE_DELAY_MS
+		int "Milliseconds between sampling button state"
+		default 10
+		help
+			Ticks between sampling button state for debounce.
+			This is *not* the time for a button state change to				be counted. It is the time between two samplings of
+			the button states. Multiple consecutive readings of
+			the same value is required for a button to change
+			state. See button_loop() for more info.
+
+	endmenu
+
+
+
+endmenu
+	
+
+	

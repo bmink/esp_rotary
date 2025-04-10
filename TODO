@@ -1,0 +1,8 @@
+use uint8_t instead of char??!!
+event queue
+event queue example
+value read
+value read example
+speed boost modes
+switch debounce
+componentize, see https://github.com/craftmetrics/esp32-button/tree/master
