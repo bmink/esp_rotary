@@ -1,19 +1,47 @@
 # esp_rotary
 
-Accurate & feature-rich rotary encoder driver for ESP32. Will not
+Accurate & feature-rich rotary encoder library for ESP32. Will not
 miss or count extra steps even when turned very fast.
 
 Features:
 * Value counting is done with a state machine to ensure reliable increment /
 decrement counting (see "Implementation Notes" below)
 * Multiple rotary count modes: bound, wraparound
-* Optional "speed boost" mode: if the knob is turned fast, a multiplier is
-applied to the increments / decrements
+* Optional "speed boost" mode: if the knob is turned fast, the value changes
+even faster
 * Callers receive turn and switch events via a queue *and* also can read
 count value and switch status at any time
-* Switch has software debounce
+* Reliable software debounce for the switch
 
-# Using the driver
+# Installing esp_rotary
+
+* Clone the repo
+
+* In your project's directory, issue `idf.py add-dependency esp_rotary`
+
+* Make sure the esp_rotary can be found by the build system. One way to do this
+is to edit your project's `CMakeLists.txt` and add the following line:
+
+```CMake
+set(EXTRA_COMPONENT_DIRS "<directory>")
+```
+
+where `<directory>` should be the parent directory in which `esp_rotary` has
+been installed
+
+* It's a good idea to issue `idf.py clean` to make sure the new dependency
+will be cleaned up and built.
+
+
+# Configuration options
+
+`esp_rotary` exposes a number of compile-time config options via Kconfig.
+In your project directory, issue `idf.py menuconfig` and look for
+`Component config` and then `Rotary Encoders`. See the help text for the
+various parameters to explain their meaning.
+
+
+# Using the library
 
 ## Setup
 Applications should `#include "esp_rotary.h"`.

@@ -1,6 +1,6 @@
 vesion: "1.0.0"
-description: "Driver for rotary encoders"
-url: "http://bmink.tech"
+description: "Rotary encoder library for esp-idf"
+url: "https://github.com/bmink/esp_rotary"
 dependencies:
   idf:
     version: ">=4.1.0"
