@@ -17,20 +17,21 @@ count value and switch status at any time
 
 * Clone the repo
 
-* In your project's directory, issue `idf.py add-dependency esp_rotary`
+* Add `esp_rotary` as a dependency in your project. Add the following lines to
+the `dependencies:` section in `main/idf_component.yml`:
 
-* Make sure the esp_rotary can be found by the build system. One way to do this
-is to edit your project's `CMakeLists.txt` and add the following line:
+```
+dependencies:
 
-```CMake
-set(EXTRA_COMPONENT_DIRS "<directory>")
+  esp_rotary:
+    path: "path/to/esp_rotary"
 ```
 
-where `<directory>` should be the parent directory in which `esp_rotary` has
-been installed
+Note: if your project doesn't yet have a manifest file, you can create one
+using `idf.py create-manifest`
 
-* It's a good idea to issue `idf.py clean` to make sure the new dependency
-will be cleaned up and built the next time you run `idf.py build`.
+* It's a good idea to issue `idf.py clean` to make sure everything will be
+rebuilt with the new dependency the next time you run `idf.py build`.
 
 
 # Configuration options
