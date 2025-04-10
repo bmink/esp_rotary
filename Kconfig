@@ -76,7 +76,8 @@ menu "Rotary Encoders"
 		default 10
 		help
 			Ticks between sampling button state for debounce.
-			This is *not* the time for a button state change to				be counted. It is the time between two samplings of
+			This is *not* the time for a button state change to
+			be counted. It is the time between two samplings of
 			the button states. Multiple consecutive readings of
 			the same value is required for a button to change
 			state. See button_loop() for more info.
