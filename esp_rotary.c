@@ -287,9 +287,6 @@ event_loop(void *arg)
 	TickType_t	diff;
 	int		absincr;
 
-printf("Rotary size: %d\n", sizeof(rotary_t));
-printf("Entering event loop\n");
-
 	while(1) {
 		/* Wait for events from ISRr */
 		if(xQueueReceive(isr_event_queue, &event, portMAX_DELAY) !=
@@ -339,9 +336,10 @@ printf("Entering event loop\n");
 					}
 				}
 
-
+#if 0
 if(absincr>1)
 printf("absincr=%d\n", absincr);
+#endif
 
 				if(statech & COUNT_INCR) {
 					rev.re_type = ROT_EVENT_INCREMENT;
