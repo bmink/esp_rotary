@@ -498,29 +498,6 @@ button_loop(void *arg)
 	}
 } 
 
-
-int
-config_led_gpio(int pinnr)
-{
-	gpio_config_t	config;
-	int		ret;
-
-	memset(&config, 0, sizeof(gpio_config_t));
-
-	config.mode = GPIO_MODE_OUTPUT;
-	config.intr_type = GPIO_INTR_DISABLE;
-	config.pin_bit_mask = 1ULL << pinnr;
-	ret = gpio_config(&config);
-	if(ret != ESP_OK) {
-		printf("Could not config gpio\n");
-		return ret;
-		
-	}
-
-	return 0;
-}
-
-
 esp_err_t
 rotary_config(rotary_config_t *rconf, uint8_t cnt)
 {
@@ -568,7 +545,6 @@ rotary_config(rotary_config_t *rconf, uint8_t cnt)
 
 		config.pin_bit_mask |= 1ULL << conf->rc_pin_a;
 		config.pin_bit_mask |= 1ULL << conf->rc_pin_b;
-		config.pin_bit_mask |= 1ULL << conf->rc_pin_button;
 
 		ret = gpio_isr_handler_add(conf->rc_pin_a, isr_rotary,
 		    (void *) i);
@@ -601,6 +577,26 @@ rotary_config(rotary_config_t *rconf, uint8_t cnt)
 
 		rot->ro_conf = *conf;
 		rot->ro_state = STATE_IDLE;
+	}
+
+	ret = gpio_config(&config);
+	if(ret != ESP_OK) {
+		err = ret;
+		goto end_label;
+	}
+
+	/* Configure the button pins separately. The difference is we don't
+	 * configure interrupts for these. */
+	memset(&config, 0, sizeof(gpio_config_t));
+	config.mode = GPIO_MODE_INPUT;
+	config.intr_type = GPIO_INTR_DISABLE;
+	config.pull_up_en = 1;
+
+	for(i = 0; i < cnt; ++i) {
+		rot = &rotary[i];
+		conf = &rconf[i];
+
+		config.pin_bit_mask |= 1ULL << conf->rc_pin_button;
 	}
 
 	ret = gpio_config(&config);
