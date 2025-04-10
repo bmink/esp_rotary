@@ -80,10 +80,7 @@ menu "Rotary Encoders"
 			the button states. Multiple consecutive readings of
 			the same value is required for a button to change
 			state. See button_loop() for more info.
-
 	endmenu
-
-
 
 endmenu
 	
