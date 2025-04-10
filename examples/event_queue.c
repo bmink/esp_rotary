@@ -39,6 +39,7 @@ void
 app_main(void)
 {
 	esp_err_t	ret;
+	rotary_event_t	rev;
 
 	/* Rotary encoders have to be configured all at once. Here we set up
          * two encoders */
@@ -73,7 +74,6 @@ app_main(void)
 	ESP_GOTO_ON_ERROR(config_led_gpio(GPIO_BLINK), err_label,
 	    logtag, "Could not configure LED on pin %d", GPIO_BLINK);
 
-	rotary_event_t	rev;
 	while(1) {
 		if(xQueueReceive(rotary_event_queue, &rev, portMAX_DELAY) !=
 		   pdPASS)
@@ -99,6 +99,8 @@ app_main(void)
 			break;
 		}
 	}
+
+
 err_label:
 
 	printf("Error: %s\n", esp_err_to_name(ret));

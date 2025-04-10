@@ -86,13 +86,10 @@ app_main(void)
 		printf("\n");
 	}
 	
-#endif
 
 err_label:
 
 	printf("Error: %s\n", esp_err_to_name(ret));
-
-printf("%d\n", CONFIG_ROTARY_BAR);
 
 	while (1) {
        		gpio_set_level(GPIO_BLINK, 0);
