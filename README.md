@@ -30,20 +30,21 @@ where `<directory>` should be the parent directory in which `esp_rotary` has
 been installed
 
 * It's a good idea to issue `idf.py clean` to make sure the new dependency
-will be cleaned up and built.
+will be cleaned up and built the next time you run `idf.py build`.
 
 
 # Configuration options
 
 `esp_rotary` exposes a number of compile-time config options via Kconfig.
-In your project directory, issue `idf.py menuconfig` and look for
-`Component config` and then `Rotary Encoders`. See the help text for the
-various parameters to explain their meaning.
+In your project directory, issue `idf.py menuconfig` and look for the
+`Component config` and then `Rotary Encoders` menus. See the help text for
+the various parameters to explain their meaning.
 
 
 # Using the library
 
-## Setup
+## Configuring rotary encoders
+
 Applications should `#include "esp_rotary.h"`.
 
 Encoders are set up and configured via `rotary_config()` which takes an array
@@ -158,53 +159,6 @@ while(1) {
 	printf("\n");
 
 }
-```
-
-
-## Compile-time configuration options
-
-`rotary_params.h` contains constants that can be modified to the application's
-needs. Most of these are fine to leave alone. The only one to pay attention to
-is `ROTARY_CALL_GPIO_INSTALL_ISR_SERVICE`. gpio_install_isr_service() must
-only be called once, so if you application already calls it somewhere else,
-make sure to set this to 0.
-
-The following constants are defined:
-
-```
-#define ROTARY_CALL_GPIO_INSTALL_ISR_SERVICE 1
-        /* If this is nonzero, rotary_config() will call
-         * gpio_install_isr_service(). Set to 0 or the application will call
-         * it (make sure it is called before rotary_config() */
-
-#define ROTARY_GPIO_INSTALL_ISR_SERVICE_FLAGS 0
-        /* Flags to call gpio_install_isr_service() with. */
-
-#define ROTARY_ISR_EVENT_TASK_PRI 10
-        /* Priority of esp_rotary's internal event management task. */
-
-#define ROTARY_SWITCH_DEBOUNCE_TICKS pdMS_TO_TICKS(50)
-        /* Ticks delay for the switch debounce logic */
-
-#define ROTARY_SPEED_BOOST_MEDIUM_TICKS pdMS_TO_TICKS(20)
-        /* Ticks between value changes under which the medium boost
-         * mode will engage */
-
-#define ROTARY_SPEED_BOOST_MEDIUM_VALUE_CHANGE 5
-        /* Value change to apply in medium boost mode  */
-
-#define ROTARY_SPEED_BOOST_FAST_TICKS pdMS_TO_TICKS(10)
-        /* Ticks between value changes under which the fast boost
-         * mode will engage */
-
-#define ROTARY_SPEED_BOOST_FAST_VALUE_CHANGE 10
-        /* Value change to apply in fast boost mode  */
-
-#define ROTARY_EVENT_QUEUE_SIZE 10
-        /* Size of rotary_event_queue  */
-
-#define ROTARY_ISR_QUEUE_SIZE 10
-        /* Size of esp_rotary's internal ISR event queue  */
 ```
 
 
