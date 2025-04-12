@@ -41,6 +41,8 @@ app_main(void)
 	esp_err_t	ret;
 	rotary_config_t	rconf[2];
 
+	ret = ESP_OK;
+;
 	/* Set up onboard LED (will blink on error) */
 	ESP_GOTO_ON_ERROR(config_led_gpio(GPIO_BLINK), err_label,
 	    logtag, "Could not configure LED on pin %d", GPIO_BLINK);
