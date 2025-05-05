@@ -28,7 +28,6 @@ static uint8_t rotary_cnt = 0;
 QueueHandle_t rotary_event_queue = NULL;
 
 
-
 esp_err_t
 rot_set_val(rotary_t *rot, const int32_t val)
 {
@@ -253,15 +252,18 @@ isr_rotary(void *arg)
 { 
 	uint32_t 	a_value;
 	uint32_t 	b_value;
-	uint32_t	regs;
+	uint64_t	regs;
 	uint8_t	idx;
 	uint16_t	event;
 
 	/* Since we are in an ISR, we are checking the pin value by accessing
-	 * the GPIO input register directly */
+	 * the GPIO input register directly. */
 	idx = (uint32_t) arg;
 
-	regs = (REG_READ(GPIO_IN_REG));
+	regs = REG_READ(GPIO_IN1_REG);
+	regs <<= 32;
+	regs |=  REG_READ(GPIO_IN_REG);
+
 	a_value = (regs >> rotary[idx].ro_conf.rc_pin_a) & 1;
 	b_value = (regs >> rotary[idx].ro_conf.rc_pin_b) & 1;
 
@@ -293,15 +295,14 @@ event_loop(void *arg)
 		   pdPASS)
 			continue;
 
-
 		idx = event >> 8;
 		evbyte = event & 0xff;
-
 
 		if(idx >= rotary_cnt)
 			continue;
 
 		rot = &rotary[idx];
+
 	
 		if(evbyte & (1<<7)) {
 			/* Rotary event */
@@ -442,19 +443,18 @@ button_loop(void *arg)
 
 	uint32_t 		butnval;
 	rotary_button_state_t 	curstate;
-	uint32_t		regs;
 	uint8_t			i;
 	rotary_event_t		event;
 	rotary_t		*rot;
 	int			ret;
 	
 
+
 	while(1) {
-		regs = (REG_READ(GPIO_IN_REG));
 	
 		for(i = 0; i < rotary_cnt; ++i) {
 			rot = &rotary[i];
-			butnval = (regs >> rot->ro_conf.rc_pin_switch) & 1;
+			butnval = gpio_get_level(rot->ro_conf.rc_pin_button);
 
 			rot->ro_button_history <<= 1;
 			rot->ro_button_history |= butnval;
@@ -594,7 +594,7 @@ rotary_config(rotary_config_t *rconf, uint8_t cnt)
 		rot = &rotary[i];
 		conf = &rconf[i];
 
-		config.pin_bit_mask |= 1ULL << conf->rc_pin_switch;
+		config.pin_bit_mask |= 1ULL << conf->rc_pin_button;
 	}
 
 	ret = gpio_config(&config);

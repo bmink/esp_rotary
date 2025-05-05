@@ -20,7 +20,7 @@ typedef struct rotary_config {
 
 	uint8_t			rc_pin_a;
 	uint8_t			rc_pin_b;
-	uint8_t			rc_pin_switch;
+	uint8_t			rc_pin_button;
 
 
 } rotary_config_t;
