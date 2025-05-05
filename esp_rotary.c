@@ -454,7 +454,7 @@ button_loop(void *arg)
 	
 		for(i = 0; i < rotary_cnt; ++i) {
 			rot = &rotary[i];
-			butnval = (regs >> rot->ro_conf.rc_pin_button) & 1;
+			butnval = (regs >> rot->ro_conf.rc_pin_switch) & 1;
 
 			rot->ro_button_history <<= 1;
 			rot->ro_button_history |= butnval;
@@ -594,7 +594,7 @@ rotary_config(rotary_config_t *rconf, uint8_t cnt)
 		rot = &rotary[i];
 		conf = &rconf[i];
 
-		config.pin_bit_mask |= 1ULL << conf->rc_pin_button;
+		config.pin_bit_mask |= 1ULL << conf->rc_pin_switch;
 	}
 
 	ret = gpio_config(&config);
