@@ -296,14 +296,14 @@ event_loop(void *arg)
 
 	while(1) {
 
-		/* Make sure configs are not updated on us while we access
-		 * them */
-		xSemaphoreTake(rotary_config_mutex, portMAX_DELAY);
-
 		/* Wait for events from ISRr */
 		if(xQueueReceive(isr_event_queue, &event, portMAX_DELAY) !=
 		   pdPASS)
-			goto next_iter;
+			continue;
+
+		/* Make sure configs are not updated on us while we access
+		 * them */
+		xSemaphoreTake(rotary_config_mutex, portMAX_DELAY);
 
 		idx = event >> 8;
 		evbyte = event & 0xff;
