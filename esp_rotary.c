@@ -26,6 +26,11 @@ typedef struct rotary {
 static rotary_t	*rotary = NULL;
 static uint8_t rotary_cnt = 0;	
 QueueHandle_t rotary_event_queue = NULL;
+static SemaphoreHandle_t rotary_config_mutex;	/* For updating rotary configs
+						 * during runtime. Pin numbers
+						 * cannot updated so those
+						 * values don't need
+						 * protection. */
 
 
 esp_err_t
@@ -237,12 +242,12 @@ static char rot_state_change[STATE_CNT][4] = {
  *  7 6 5 4 3 2 1 0
  *  | | | | | | | +- status of rotary B
  *  | | | | | | +--- status of rotary A
- *  | | | | | +----- status of button (0=notpressed, 1=pressed)
+ *  | | | | | +----- not used
  *  | | | | +------- not used
  *  | | | +--------- not used
  *  | | +----------- not used
  *  | +------------- not used
- *  +--------------- event type (1 - rotary, 0 - button)
+ *  +--------------- not used
  */
 
 static QueueHandle_t isr_event_queue = NULL;
@@ -267,7 +272,7 @@ isr_rotary(void *arg)
 	a_value = (regs >> rotary[idx].ro_conf.rc_pin_a) & 1;
 	b_value = (regs >> rotary[idx].ro_conf.rc_pin_b) & 1;
 
-	event = ((uint16_t)idx) << 8 | (a_value << 1) | b_value | (1 << 7);
+	event = ((uint16_t)idx) << 8 | (a_value << 1) | b_value;
 
 	xQueueSendFromISR(isr_event_queue, &event, NULL);
 }
@@ -290,145 +295,139 @@ event_loop(void *arg)
 	int		absincr;
 
 	while(1) {
+
+		/* Make sure configs are not updated on us while we access
+		 * them */
+		xSemaphoreTake(rotary_config_mutex, portMAX_DELAY);
+
 		/* Wait for events from ISRr */
 		if(xQueueReceive(isr_event_queue, &event, portMAX_DELAY) !=
 		   pdPASS)
-			continue;
+			goto next_iter;
 
 		idx = event >> 8;
 		evbyte = event & 0xff;
 
 		if(idx >= rotary_cnt)
-			continue;
+			goto next_iter;
 
 		rot = &rotary[idx];
 
 	
-		if(evbyte & (1<<7)) {
-			/* Rotary event */
-			changed = 0;
-			statech = rot_state_change[rot->ro_state][evbyte & 0xf];
+		/* Rotary event */
+		changed = 0;
+		statech = rot_state_change[rot->ro_state][evbyte & 0xf];
 
-			rot->ro_state = statech & 0xf;
+		rot->ro_state = statech & 0xf;
 
-			if(statech & (COUNT_INCR | COUNT_DECR)) {
-				memset(&rev, 0, sizeof(rotary_event_t));
-				rev.re_idx = idx;
+		if(statech & (COUNT_INCR | COUNT_DECR)) {
+			memset(&rev, 0, sizeof(rotary_event_t));
+			rev.re_idx = idx;
 
-				ret  = rot_get_val(rot, &val);
-				if(ret != pdPASS)
-					continue;
+			ret  = rot_get_val(rot, &val);
+			if(ret != pdPASS)
+				goto next_iter;
 
-				absincr = 1;	/* Default is increment or
-						 * decrement by 1 */
+			absincr = 1;	/* Default is increment or
+					 * decrement by 1 */
 
-				/* Check speed boost */
-				now = xTaskGetTickCount();
-				diff = now - rot->ro_last_valchange;
-				if(rot->ro_conf.rc_enable_speed_boost &&
-				    (diff < pdMS_TO_TICKS(
-				    CONFIG_ROTARY_SPEED_BOOST_MS))) {
-					if(((statech & COUNT_INCR) &&
-				           (rot->ro_last_valchange_dir > 0)) ||
-					   ((statech & COUNT_DECR) &&
-				           (rot->ro_last_valchange_dir < 0))) {
-						absincr = 
-					 CONFIG_ROTARY_SPEED_BOOST_VALUE_CHANGE;
-					}
+			/* Check speed boost */
+			now = xTaskGetTickCount();
+			diff = now - rot->ro_last_valchange;
+			if(rot->ro_conf.rc_enable_speed_boost &&
+			    (diff < pdMS_TO_TICKS(
+			    CONFIG_ROTARY_SPEED_BOOST_MS))) {
+				if(((statech & COUNT_INCR) &&
+			           (rot->ro_last_valchange_dir > 0)) ||
+				   ((statech & COUNT_DECR) &&
+			           (rot->ro_last_valchange_dir < 0))) {
+					absincr = 
+				 CONFIG_ROTARY_SPEED_BOOST_VALUE_CHANGE;
 				}
-
-#if 0
-if(absincr>1)
-printf("absincr=%d\n", absincr);
-#endif
-
-				if(statech & COUNT_INCR) {
-					rev.re_type = ROT_EVENT_INCREMENT;
-					switch(rot->ro_conf.rc_style) {
-					case ROT_STYLE_BOUND:
-						if(val == rot->ro_conf.rc_max)
-							break;
-
-						/* Check for overflow */
-						if(rot->ro_conf.rc_max - val
-						    >= absincr)
-							val += absincr;
-						else
-						   val = rot->ro_conf.rc_max;
-
-						++changed;
-						break;
-
-					case ROT_STYLE_WRAPAROUND:
-					default:
-						/* Check for overflow */
-						if(rot->ro_conf.rc_max - val
-                                                    >= absincr)
-							val += absincr;
-						else
-						    val = rot->ro_conf.rc_min +
-						    (rot->ro_conf.rc_max - val);
-
-						++changed;
-						break;
-					}
-				}
-				else { /* COUNT_DECR */	
-					rev.re_type = ROT_EVENT_DECREMENT;
-					switch(rot->ro_conf.rc_style) {
-					case ROT_STYLE_BOUND:
-						if(val == rot->ro_conf.rc_min)
-							break;
-
-						/* Check for overflow */
-						if(val - rot->ro_conf.rc_min
-						    >= absincr)
-							val -= absincr;
-						else
-						   val = rot->ro_conf.rc_min;
-
-						++changed;
-						break;
-
-					case ROT_STYLE_WRAPAROUND:
-					default:
-						/* Check for overflow */
-						if(val - rot->ro_conf.rc_min
-                                                    >= absincr)
-							val -= absincr;
-						else
-						    val = rot->ro_conf.rc_max -
-						    (val - rot->ro_conf.rc_min);
-
-						++changed;
-						break;
-					}
-				}
-
-				if(changed)
-					rot_set_val(rot, val);
-
-				rot->ro_last_valchange = now;
-				if(statech & COUNT_INCR)
-					rot->ro_last_valchange_dir = 1;
-				else /* COUNT_DECR */
-					rot->ro_last_valchange_dir = -1;
 			}
 
-			
+			if(statech & COUNT_INCR) {
+				rev.re_type = ROT_EVENT_INCREMENT;
+				switch(rot->ro_conf.rc_style) {
+				case ROT_STYLE_BOUND:
+					if(val == rot->ro_conf.rc_max)
+						break;
 
-			if(changed) {
-				rev.re_value = val;
-				xQueueSend(rotary_event_queue, &rev, 0);
+					/* Check for overflow */
+					if(rot->ro_conf.rc_max - val
+					    >= absincr)
+						val += absincr;
+					else
+					   val = rot->ro_conf.rc_max;
+
+					++changed;
+					break;
+
+				case ROT_STYLE_WRAPAROUND:
+				default:
+					/* Check for overflow */
+					if(rot->ro_conf.rc_max - val
+                                                   >= absincr)
+						val += absincr;
+					else
+					    val = rot->ro_conf.rc_min +
+					    (rot->ro_conf.rc_max - val);
+
+					++changed;
+					break;
+				}
 			}
-			
-		} else
-		if(evbyte & (1<<6)) {
-			/* Switch event */
+			else { /* COUNT_DECR */	
+				rev.re_type = ROT_EVENT_DECREMENT;
+				switch(rot->ro_conf.rc_style) {
+				case ROT_STYLE_BOUND:
+					if(val == rot->ro_conf.rc_min)
+						break;
+
+					/* Check for overflow */
+					if(val - rot->ro_conf.rc_min
+					    >= absincr)
+						val -= absincr;
+					else
+					   val = rot->ro_conf.rc_min;
+
+					++changed;
+					break;
+
+				case ROT_STYLE_WRAPAROUND:
+				default:
+					/* Check for overflow */
+					if(val - rot->ro_conf.rc_min
+                                                   >= absincr)
+						val -= absincr;
+					else
+					    val = rot->ro_conf.rc_max -
+					    (val - rot->ro_conf.rc_min);
+
+					++changed;
+					break;
+				}
+			}
+
+			if(changed)
+				rot_set_val(rot, val);
+
+			rot->ro_last_valchange = now;
+			if(statech & COUNT_INCR)
+				rot->ro_last_valchange_dir = 1;
+			else /* COUNT_DECR */
+				rot->ro_last_valchange_dir = -1;
 		}
 
-		//printf("high watermark: %d\n",
-		//    uxTaskGetStackHighWaterMark(NULL));
+		if(changed) {
+			rev.re_value = val;
+			xQueueSend(rotary_event_queue, &rev, 0);
+		}
+		
+
+next_iter:
+		xSemaphoreGive(rotary_config_mutex);
+		
 	}
 }
 
@@ -619,6 +618,8 @@ rotary_config(rotary_config_t *rconf, uint8_t cnt)
 
 	rotary_cnt = cnt;
 
+	rotary_config_mutex = xSemaphoreCreateMutex();
+
 	ret = xTaskCreate(event_loop, "rotary_event_loop",
 	    CONFIG_ROTARY_ISR_EVENT_TASK_HEAP, NULL,
 	    CONFIG_ROTARY_ISR_EVENT_TASK_PRIORITY, NULL);
@@ -654,4 +655,44 @@ end_label:
 
 	return err;
 }
+
+
+esp_err_t
+rotary_reconfig(rotary_config_t *rconf, uint8_t cnt)
+{
+	uint32_t	i;
+	rotary_t	*rot;
+	rotary_config_t	*conf;
+
+	if(rotary == 0)
+		return ESP_ERR_NOT_ALLOWED; /* Not yet configured */
+
+	if(rconf == NULL || cnt == 0)
+		return ESP_ERR_INVALID_ARG;
+
+	if(cnt != rotary_cnt) 
+		return ESP_ERR_NOT_ALLOWED; /* Input must match previously
+					     * configured rotary count */
+
+	xSemaphoreTake(rotary_config_mutex, portMAX_DELAY);
+	
+	for(i = 0; i < cnt; ++i) {
+		rot = &rotary[i];
+		conf = &rconf[i];
+
+		rot->ro_conf.rc_style = conf->rc_style;
+		rot->ro_conf.rc_max = conf->rc_max;
+		rot->ro_conf.rc_min = conf->rc_min;
+		rot->ro_conf.rc_start = conf->rc_start;
+		rot->ro_conf.rc_enable_speed_boost =
+		    conf->rc_enable_speed_boost;
+		rot_set_val(rot, conf->rc_start);
+	}
+
+	xSemaphoreGive(rotary_config_mutex);
+
+	return 0;
+}
+
+
 

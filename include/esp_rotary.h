@@ -26,6 +26,7 @@ typedef struct rotary_config {
 } rotary_config_t;
 
 esp_err_t rotary_config(rotary_config_t *, uint8_t);
+esp_err_t rotary_reconfig(rotary_config_t *, uint8_t);
 
 
 typedef enum rotary_button_state {

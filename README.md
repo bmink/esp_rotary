@@ -162,6 +162,16 @@ while(1) {
 }
 ```
 
+## Reconfiguring rotary encoders during runtime
+
+Applications may find it necessary to reconfigure the encoders during runtime,
+such as when entering a new mode of operation requiring different min, max, etc
+values. The thread-safe API `rotary_reconfig()` is provided for this purpose.
+Its input is identical to that of `rotary_config()`, ie. one or more
+`rotary_config_t` structures. Style (wraparound, bound, etc), min, max,
+start and "speed boost enabled" values will be updated, pin information
+in the input will be ignored.
+
 
 # Implementation notes
 
