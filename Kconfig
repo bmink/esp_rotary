@@ -61,12 +61,12 @@ menu "Rotary Encoders"
 			If two clicks of the rotary encoder are closer together
 			than this time period, speed boost will be activated.
 
-		config ROTARY_SPEED_BOOST_VALUE_CHANGE
-		int "Value change"
+		config ROTARY_SPEED_BOOST_MULTIPLIER
+		int "Step multiplier"
 		default 10
 		help
-			Value increase / decrease per rotary click if speed
-			boost is active.
+			If speed boost is active, value change for each step
+			will be multiplied by this factor.
 
 	endmenu
 

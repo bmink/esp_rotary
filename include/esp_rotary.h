@@ -16,6 +16,7 @@ typedef struct rotary_config {
 	int32_t			rc_max;
 	int32_t			rc_min;
 	int32_t			rc_start;
+	uint8_t			rc_step_value;
 	uint8_t			rc_enable_speed_boost;
 
 	uint8_t			rc_pin_a;

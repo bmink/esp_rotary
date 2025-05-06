@@ -328,8 +328,8 @@ event_loop(void *arg)
 			if(ret != pdPASS)
 				goto next_iter;
 
-			absincr = 1;	/* Default is increment or
-					 * decrement by 1 */
+			/* Default increment / decrement as configured */
+			absincr = rot->ro_conf.rc_step_value;
 
 			/* Check speed boost */
 			now = xTaskGetTickCount();
@@ -341,8 +341,8 @@ event_loop(void *arg)
 			           (rot->ro_last_valchange_dir > 0)) ||
 				   ((statech & COUNT_DECR) &&
 			           (rot->ro_last_valchange_dir < 0))) {
-					absincr = 
-				 CONFIG_ROTARY_SPEED_BOOST_VALUE_CHANGE;
+					absincr *= 
+				 CONFIG_ROTARY_SPEED_BOOST_MULTIPLIER;
 				}
 			}
 
@@ -573,6 +573,11 @@ rotary_config(rotary_config_t *rconf, uint8_t cnt)
 		}
 
 		rot->ro_conf = *conf;
+
+		/* Ignore step multiplier values < 1 */
+		if(rot->ro_conf.rc_step_value < 1)
+			rot->ro_conf.rc_step_value = 1;
+
 		rot->ro_state = STATE_IDLE;
 	}
 
@@ -684,6 +689,12 @@ rotary_reconfig(rotary_config_t *rconf, uint8_t cnt)
 		rot->ro_conf.rc_max = conf->rc_max;
 		rot->ro_conf.rc_min = conf->rc_min;
 		rot->ro_conf.rc_start = conf->rc_start;
+		if(conf->rc_step_value > 1) {
+			rot->ro_conf.rc_step_value =
+			    conf->rc_step_value;
+		} else
+			rot->ro_conf.rc_step_value = 1;
+
 		rot->ro_conf.rc_enable_speed_boost =
 		    conf->rc_enable_speed_boost;
 		rot_set_val(rot, conf->rc_start);

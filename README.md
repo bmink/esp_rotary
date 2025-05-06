@@ -71,6 +71,7 @@ rconf[0].rc_style = ROT_STYLE_BOUND; /* Will not go over min and max */
 rconf[0].rc_min = 0;
 rconf[0].rc_max = 100000;
 rconf[0].rc_start = 0;
+rconf[0].rc_step_value = 1;
 rconf[0].rc_enable_speed_boost = 1; /* Enable speed boost mode */
 
 rconf[1].rc_pin_a = 7;
@@ -80,6 +81,7 @@ rconf[1].rc_style = ROT_STYLE_WRAPAROUND; /* Value will wrap around */
 rconf[1].rc_max = 30;
 rconf[1].rc_min = -10;
 rconf[1].rc_start = 10;
+rconf[0].rc_step_value = 2;	/* Value will increase / decrease by 2 */
 
 if(rotary_config(rconf, 2) != ESP_OK) {
 	printf("Could not configure rotary encoders\n");
