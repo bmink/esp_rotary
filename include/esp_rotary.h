@@ -28,7 +28,7 @@ typedef struct rotary_config {
 
 esp_err_t rotary_config(rotary_config_t *, uint8_t);
 esp_err_t rotary_reconfig(rotary_config_t *, uint8_t);
-
+void rotary_getconfig(rotary_config_t *, uint8_t);
 
 typedef enum rotary_button_state {
 	BUTTON_NOTPRESSED,
@@ -38,6 +38,7 @@ typedef enum rotary_button_state {
 int32_t	rotary_get_value(uint8_t);
 rotary_button_state_t rotary_get_button_state(uint8_t);
 
+void rotary_set_value(uint8_t, int32_t);
 
 typedef enum rotary_event_type {
 	ROT_EVENT_INCREMENT,

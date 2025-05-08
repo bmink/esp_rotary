@@ -48,6 +48,16 @@ rot_set_val(rotary_t *rot, const int32_t val)
 }
 
 
+void
+rotary_set_value(uint8_t idx, int32_t val)
+{
+	if(rotary == NULL || idx >= rotary_cnt)
+		return;
+	
+	rot_set_val(&rotary[idx], val);
+}
+
+
 esp_err_t
 rot_get_val(rotary_t *rot, int32_t *val)
 {
@@ -703,6 +713,24 @@ rotary_reconfig(rotary_config_t *rconf, uint8_t cnt)
 	xSemaphoreGive(rotary_config_mutex);
 
 	return 0;
+}
+
+
+void
+rotary_getconfig(rotary_config_t *rconf, uint8_t cnt)
+{
+	int	i;
+	
+	if(rotary == NULL || rconf == 0 || cnt != rotary_cnt)
+		return;
+
+	xSemaphoreTake(rotary_config_mutex, portMAX_DELAY);
+
+	for(i = 0; i < cnt; ++i) {
+		rconf[i] = rotary[i].ro_conf;
+	}
+
+	xSemaphoreGive(rotary_config_mutex);
 }
 
 
