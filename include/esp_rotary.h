@@ -55,5 +55,7 @@ typedef struct rotary_event {
 
 extern QueueHandle_t	rotary_event_queue;
 
+void rotary_event_queue_reset(void);
+
 
 #endif

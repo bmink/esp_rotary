@@ -574,7 +574,7 @@ rotary_config(rotary_config_t *rconf, uint8_t cnt)
 
 		rot->ro_conf = *conf;
 
-		/* Ignore step multiplier values < 1 */
+		/* Ignore step values < 1 */
 		if(rot->ro_conf.rc_step_value < 1)
 			rot->ro_conf.rc_step_value = 1;
 
@@ -703,6 +703,13 @@ rotary_reconfig(rotary_config_t *rconf, uint8_t cnt)
 	xSemaphoreGive(rotary_config_mutex);
 
 	return 0;
+}
+
+
+void
+rotary_event_queue_reset(void)
+{
+	xQueueReset(rotary_event_queue);
 }
 
 
