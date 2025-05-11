@@ -1,6 +1,6 @@
 # esp_rotary
 
-Accurate & feature-rich rotary encoder library for ESP32. Will not
+Accurate & feature-rich rotary encoder driver for ESP32. Will not
 miss or count extra steps even when turned very fast.
 
 Features:
